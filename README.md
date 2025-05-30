@@ -7,6 +7,7 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - Real-time pressure monitoring with analog pressure sensor (displayed in bar)
 - OLED display (128x64) showing current pressure with WiFi signal strength indicator
 - Web interface for remote monitoring with visual pressure gauge
+- Automatic backflush control with configurable pressure threshold and duration
 - JSON API endpoint for integration with other systems
 - WiFi configuration portal for easy setup
 - Reset button to clear WiFi settings when needed
@@ -17,6 +18,7 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - 3-wire analog pressure sensor
 - 128x64 OLED display with SSD1315 chip (I2C interface)
 - Push button for resetting WiFi settings
+- Relay module for backflush control
 - Jumper wires
 - Power supply (USB or external)
 
@@ -36,6 +38,11 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 ### Reset Button
 - One terminal: D3 (GPIO0)
 - Other terminal: GND
+
+### Backflush Relay
+- Control pin: D5 (GPIO14)
+- VCC: External power source appropriate for your relay
+- GND: Common ground
 
 ## Software Setup
 
@@ -60,8 +67,10 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 5. Enter your WiFi credentials in the portal
 6. After connecting, the OLED display will show the current pressure and WiFi status
 7. Access the web interface by navigating to the IP address shown on the OLED display
-8. The web page auto-refreshes every 5 seconds
-9. For programmatic access, use the `/api` endpoint which returns JSON data
+8. Configure the backflush settings (threshold pressure and duration) on the web interface
+9. The device will automatically activate the backflush relay when pressure exceeds the threshold
+10. The web page auto-refreshes every 5 seconds
+11. For programmatic access, use the `/api` endpoint which returns JSON data
 
 ### Display Layout
 
@@ -75,11 +84,11 @@ The OLED display layout looks like this:
 |         2.4                |
 |                 bar        |
 |                            |
-|                            |
+| Threshold: 2.0 bar         |
 +----------------------------+
 ```
 
-The top row shows WiFi signal strength and the last octet of the IP address. The center shows the current pressure reading in bar with large digits for easy reading.
+The top row shows WiFi signal strength and the last octet of the IP address. The center shows the current pressure reading in bar with large digits for easy reading. The bottom row shows either the backflush threshold or active backflush status with countdown.
 
 ### Resetting WiFi Settings
 
@@ -93,6 +102,7 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - If the display shows incorrect pressure readings, check the sensor calibration values
 - If WiFi configuration fails, press the reset button while powering on to clear settings
 - For analog reading issues, ensure the pressure sensor is properly connected to A0
+- If the backflush relay doesn't activate, check the wiring and relay power supply
 - If the device is stuck in a reboot loop, try flashing the firmware again
 
 ## Future Improvements
