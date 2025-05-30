@@ -4,9 +4,12 @@
 #include <Adafruit_SSD1306.h>
 #include <ESP8266WiFi.h>
 #include <WiFiManager.h>
-#include <EEPROM.h>
+#include <LittleFS.h>
 #include "WebServer.h"
 #include "Display.h"
+#include "TimeManager.h"
+#include "Settings.h"
+#include "BackflushLogger.h"
 
 // OLED Display Configuration
 #define SCREEN_WIDTH 128
@@ -32,9 +35,12 @@ float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (adjust based on your sens
 // Backflush Relay Configuration
 #define RELAY_PIN D5          // GPIO14 (D5) for backflush relay
 
-// Web Server and Display
+// System components
 WebServer* webServer;
 Display* displayManager;
+TimeManager* timeManager;
+Settings* settings;
+BackflushLogger* backflushLogger;
 
 // Variables
 float currentPressure = 0.0;
@@ -59,9 +65,6 @@ void setup() {
   Serial.begin(115200);
   Serial.println("\nPool Filter Pressure Reader Starting...");
   
-  // Initialize EEPROM
-  EEPROM.begin(512);
-  
   // Initialize reset button pin
   pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
   
@@ -69,28 +72,18 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);  // Ensure relay is off at startup
   
+  // Initialize settings
+  settings = new Settings();
+  settings->begin();
+  
   // Check if reset button is pressed during startup
   if (digitalRead(RESET_BUTTON_PIN) == LOW) {
     resetSettings();
   }
   
-  // Load backflush configuration from EEPROM
-  int address = 100;
-  float savedThreshold;
-  unsigned int savedDuration;
-  
-  EEPROM.get(address, savedThreshold);
-  address += sizeof(float);
-  EEPROM.get(address, savedDuration);
-  
-  // Validate loaded values
-  if (!isnan(savedThreshold) && savedThreshold >= 0.5 && savedThreshold <= PRESSURE_MAX) {
-    backflushThreshold = savedThreshold;
-  }
-  
-  if (savedDuration >= 5 && savedDuration <= 300) {
-    backflushDuration = savedDuration;
-  }
+  // Load settings
+  backflushThreshold = settings->getBackflushThreshold();
+  backflushDuration = settings->getBackflushDuration();
   
   Serial.print("Loaded backflush threshold: ");
   Serial.print(backflushThreshold);
@@ -110,15 +103,27 @@ void setup() {
   // Setup WiFi
   setupWiFi();
   
+  // Initialize time manager
+  timeManager = new TimeManager();
+  timeManager->begin();
+  
+  // Initialize backflush logger
+  backflushLogger = new BackflushLogger(*timeManager);
+  backflushLogger->begin();
+  
   // Initialize web server
   webServer = new WebServer(currentPressure, backflushThreshold, backflushDuration, 
-                          backflushActive, backflushStartTime, backflushConfigChanged);
+                          backflushActive, backflushStartTime, backflushConfigChanged,
+                          *timeManager, *backflushLogger, *settings);
   webServer->begin();
   
   delay(2000);  // Display startup message for 2 seconds
 }
 
 void loop() {
+  // Update time from NTP server
+  timeManager->update();
+  
   // Handle WiFi and server
   webServer->handleClient();
   
@@ -135,7 +140,8 @@ void loop() {
   
   // Save backflush config if changed
   if (backflushConfigChanged) {
-    saveBackflushConfig();
+    settings->setBackflushThreshold(backflushThreshold);
+    settings->setBackflushDuration(backflushDuration);
     backflushConfigChanged = false;
   }
 }
@@ -223,22 +229,19 @@ void handleBackflush() {
       backflushActive = false;
       digitalWrite(RELAY_PIN, LOW);  // Deactivate relay
       Serial.println("Backflush completed");
+      
+      // Log the backflush event
+      if (timeManager->isTimeInitialized()) {
+        backflushLogger->logEvent(currentPressure, backflushDuration);
+        Serial.println("Backflush event logged");
+      } else {
+        Serial.println("Backflush event not logged - time not initialized");
+      }
     }
   }
 }
 
-void saveBackflushConfig() {
-  // Save backflush configuration to EEPROM
-  int address = 100;  // Start at address 100 to avoid conflict with WiFi settings
-  
-  EEPROM.put(address, backflushThreshold);
-  address += sizeof(float);
-  
-  EEPROM.put(address, backflushDuration);
-  
-  EEPROM.commit();
-  Serial.println("Backflush configuration saved");
-}
+
 
 
 
@@ -250,12 +253,15 @@ void resetSettings() {
   WiFiManager wifiManager;
   wifiManager.resetSettings();
   
+  // Reset settings to defaults
+  settings->reset();
+  
   // Visual feedback
   for (int i = 0; i < 5; i++) {
     display.clearDisplay();
     display.setCursor(0, 0);
     display.println(F("RESET BUTTON PRESSED"));
-    display.println(F("Clearing WiFi settings"));
+    display.println(F("Clearing all settings"));
     if (i % 2 == 0) {
       display.println(F("*****************"));
     }
@@ -265,7 +271,7 @@ void resetSettings() {
   
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println(F("WiFi settings cleared"));
+  display.println(F("All settings cleared"));
   display.println(F("Restarting..."));
   display.display();
   delay(2000);

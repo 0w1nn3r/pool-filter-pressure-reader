@@ -3,6 +3,9 @@
 
 #include <Arduino.h>
 #include <ESP8266WebServer.h>
+#include "TimeManager.h"
+#include "BackflushLogger.h"
+#include "Settings.h"
 
 class WebServer {
 private:
@@ -13,14 +16,20 @@ private:
     bool& backflushActive;
     unsigned long& backflushStartTime;
     bool& backflushConfigChanged;
+    TimeManager& timeManager;
+    BackflushLogger& backflushLogger;
+    Settings& settings;
 
     void handleRoot();
     void handleAPI();
     void handleBackflushConfig();
+    void handleBackflushLog();
+    void handleClearLog();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 
-              bool& active, unsigned long& startTime, bool& configChanged);
+              bool& active, unsigned long& startTime, bool& configChanged,
+              TimeManager& tm, BackflushLogger& logger, Settings& settings);
     void begin();
     void handleClient();
 };

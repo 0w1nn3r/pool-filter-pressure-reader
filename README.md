@@ -8,17 +8,21 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - OLED display (128x64) showing current pressure with WiFi signal strength indicator
 - Web interface for remote monitoring with visual pressure gauge
 - Automatic backflush control with configurable pressure threshold and duration
+- Backflush event logging with date/time stamps and pressure readings
+- NTP time synchronization for accurate timestamps
+- Persistent settings storage with CRC validation
 - JSON API endpoint for integration with other systems
 - WiFi configuration portal for easy setup
-- Reset button to clear WiFi settings when needed
+- Reset button to clear all settings when needed
 
 ## Hardware Requirements
 
 - NodeMCU Lolin V3 Module ESP8266 ESP-12E
 - 3-wire analog pressure sensor
 - 128x64 OLED display with SSD1315 chip (I2C interface)
-- Push button for resetting WiFi settings
+- Push button for resetting settings
 - Relay module for backflush control
+- Internet connection for NTP time synchronization
 - Jumper wires
 - Power supply (USB or external)
 
@@ -66,11 +70,14 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 4. A configuration portal will automatically open (or navigate to 192.168.4.1)
 5. Enter your WiFi credentials in the portal
 6. After connecting, the OLED display will show the current pressure and WiFi status
-7. Access the web interface by navigating to the IP address shown on the OLED display
-8. Configure the backflush settings (threshold pressure and duration) on the web interface
-9. The device will automatically activate the backflush relay when pressure exceeds the threshold
-10. The web page auto-refreshes every 5 seconds
-11. For programmatic access, use the `/api` endpoint which returns JSON data
+7. The device will automatically synchronize time with an NTP server
+8. Access the web interface by navigating to the IP address shown on the OLED display
+9. Configure the backflush settings (threshold pressure and duration) on the web interface
+10. The device will automatically activate the backflush relay when pressure exceeds the threshold
+11. Each backflush event is logged with timestamp and pressure reading
+12. View the backflush event log by clicking the "Backflush Log" link on the main page
+13. The web page auto-refreshes every 5 seconds
+14. For programmatic access, use the `/api` endpoint which returns JSON data
 
 ### Display Layout
 
@@ -90,11 +97,11 @@ The OLED display layout looks like this:
 
 The top row shows WiFi signal strength and the last octet of the IP address. The center shows the current pressure reading in bar with large digits for easy reading. The bottom row shows either the backflush threshold or active backflush status with countdown.
 
-### Resetting WiFi Settings
+### Resetting All Settings
 
 1. Press and hold the reset button while powering on the device
 2. The display will show a reset message
-3. Release the button and the device will clear all WiFi settings
+3. Release the button and the device will clear all settings (WiFi credentials, backflush configuration, etc.)
 4. The device will restart and enter configuration mode
 
 ## Troubleshooting
@@ -105,11 +112,31 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - If the backflush relay doesn't activate, check the wiring and relay power supply
 - If the device is stuck in a reboot loop, try flashing the firmware again
 
+## Web Interface
+
+### Main Dashboard
+- Real-time pressure display with visual gauge
+- Current time display (synchronized via NTP)
+- Backflush configuration settings
+- Link to backflush event log
+
+### Backflush Log Page
+- Table of all backflush events with date, time, pressure, and duration
+- Option to clear the log history
+- Navigation back to the main dashboard
+
+## API Endpoints
+
+- `/` - Main web interface
+- `/api` - JSON API with current status and settings
+- `/log` - Backflush event log page
+- `/clearlog` - Clear the backflush event log (redirects to log page)
+
 ## Future Improvements
 
-- Add data logging capability
-- Implement alerts for high/low pressure conditions
 - Add historical pressure graph
+- Implement alerts for high/low pressure conditions
 - Support for multiple pressure sensors
 - Add OTA (Over-the-Air) update capability
 - Implement MQTT support for IoT integration
+- Email notifications for backflush events

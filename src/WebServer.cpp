@@ -1,5 +1,4 @@
 #include "WebServer.h"
-#include <EEPROM.h>
 
 extern "C" {
   #include "user_interface.h"
@@ -9,14 +8,18 @@ extern "C" {
 extern float PRESSURE_MAX;
 
 WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration, 
-                     bool& active, unsigned long& startTime, bool& configChanged)
+                     bool& active, unsigned long& startTime, bool& configChanged,
+                     TimeManager& tm, BackflushLogger& logger, Settings& settings)
     : server(80), 
       currentPressure(pressure),
       backflushThreshold(threshold),
       backflushDuration(duration),
       backflushActive(active),
       backflushStartTime(startTime),
-      backflushConfigChanged(configChanged) {
+      backflushConfigChanged(configChanged),
+      timeManager(tm),
+      backflushLogger(logger),
+      settings(settings) {
 }
 
 void WebServer::begin() {
@@ -24,6 +27,8 @@ void WebServer::begin() {
     server.on("/", HTTP_GET, [this](){ this->handleRoot(); });
     server.on("/api", HTTP_GET, [this](){ this->handleAPI(); });
     server.on("/backflush", HTTP_POST, [this](){ this->handleBackflushConfig(); });
+    server.on("/log", HTTP_GET, [this](){ this->handleBackflushLog(); });
+    server.on("/clearlog", HTTP_GET, [this](){ this->handleClearLog(); });
     server.begin();
     Serial.println("HTTP server started");
 }
@@ -135,7 +140,12 @@ void WebServer::handleRoot() {
   html += "    </script>\n";
   
   html += "    <p class='info'>This page auto-refreshes every 5 seconds</p>\n";
-  html += "    <p>API: <a href='/api'>/api</a> (JSON format)</p>\n";
+  html += "    <p>API: <a href='/api'>/api</a> (JSON format) | <a href='/log'>Backflush Log</a></p>\n";
+  
+  // Add current time if available
+  if (timeManager.isTimeInitialized()) {
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + "</p>\n";
+  }
   html += "  </div>\n";
   html += "</body>\n";
   html += "</html>";
@@ -147,7 +157,14 @@ void WebServer::handleAPI() {
   String json = "{";
   json += "\"pressure\":" + String(currentPressure, 2) + ",";
   json += "\"unit\":\"bar\",";
-  json += "\"timestamp\":" + String(millis() / 1000) + ",";
+  
+  // Use NTP time if available, otherwise use uptime
+  if (timeManager.isTimeInitialized()) {
+    json += "\"timestamp\":" + String(timeManager.getCurrentTime()) + ",";
+    json += "\"datetime\":\"" + timeManager.getFormattedDateTime() + "\",";
+  } else {
+    json += "\"timestamp\":" + String(millis() / 1000) + ",";
+  }
   json += "\"wifi_strength\":" + String(WiFi.RSSI()) + ",";
   json += "\"backflush_threshold\":" + String(backflushThreshold, 2) + ",";
   json += "\"backflush_duration\":" + String(backflushDuration) + ",";
@@ -173,9 +190,12 @@ void WebServer::handleBackflushConfig() {
         newDuration >= 5 && newDuration <= 300) {
       backflushThreshold = newThreshold;
       backflushDuration = newDuration;
-      backflushConfigChanged = true;
       
-      // Save to EEPROM is handled in main.cpp
+      // Update settings
+      settings.setBackflushThreshold(newThreshold);
+      settings.setBackflushDuration(newDuration);
+      
+      backflushConfigChanged = true;
       
       server.send(200, "text/plain", "Configuration updated");
     } else {
@@ -184,4 +204,59 @@ void WebServer::handleBackflushConfig() {
   } else {
     server.send(400, "text/plain", "Missing parameters");
   }
+}
+
+void WebServer::handleBackflushLog() {
+  String html = "<!DOCTYPE html>\n";
+  html += "<html>\n";
+  html += "<head>\n";
+  html += "  <title>Backflush Event Log</title>\n";
+  html += "  <meta name='viewport' content='width=device-width, initial-scale=1'>\n";
+  html += "  <style>\n";
+  html += "    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }\n";
+  html += "    .container { max-width: 800px; margin: 0 auto; }\n";
+  html += "    h1 { color: #2c3e50; }\n";
+  html += "    .events-table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n";
+  html += "    .events-table th, .events-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }\n";
+  html += "    .events-table th { background-color: #f5f5f5; }\n";
+  html += "    .events-table tr:hover { background-color: #f9f9f9; }\n";
+  html += "    .button { display: inline-block; padding: 10px 20px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }\n";
+  html += "    .button.danger { background-color: #e74c3c; }\n";
+  html += "    .button:hover { opacity: 0.9; }\n";
+  html += "  </style>\n";
+  html += "</head>\n";
+  html += "<body>\n";
+  html += "  <div class='container'>\n";
+  html += "    <h1>Backflush Event Log</h1>\n";
+  
+  // Add current time if available
+  if (timeManager.isTimeInitialized()) {
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + "</p>\n";
+  }
+  
+  // Add event count
+  html += "    <p>Total events: " + String(backflushLogger.getEventCount()) + "</p>\n";
+  
+  // Add events table
+  html += backflushLogger.getEventsAsHtml();
+  
+  // Add navigation and action buttons
+  html += "    <p>\n";
+  html += "      <a href='/' class='button'>Back to Dashboard</a>\n";
+  html += "      <a href='/clearlog' class='button danger' onclick='return confirm(\"Are you sure you want to clear all log entries?\")'>Clear Log</a>\n";
+  html += "    </p>\n";
+  
+  html += "  </div>\n";
+  html += "</body>\n";
+  html += "</html>";
+  
+  server.send(200, "text/html", html);
+}
+
+void WebServer::handleClearLog() {
+  backflushLogger.clearEvents();
+  
+  // Redirect back to log page
+  server.sendHeader("Location", "/log", true);
+  server.send(302, "text/plain", "Redirecting to log page");
 }
