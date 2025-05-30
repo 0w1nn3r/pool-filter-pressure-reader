@@ -6,6 +6,7 @@
 #include <WiFiManager.h>
 #include <EEPROM.h>
 #include "WebServer.h"
+#include "Display.h"
 
 // OLED Display Configuration
 #define SCREEN_WIDTH 128
@@ -31,8 +32,9 @@ float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (adjust based on your sens
 // Backflush Relay Configuration
 #define RELAY_PIN D5          // GPIO14 (D5) for backflush relay
 
-// Web Server
+// Web Server and Display
 WebServer* webServer;
+Display* displayManager;
 
 // Variables
 float currentPressure = 0.0;
@@ -48,7 +50,6 @@ bool backflushConfigChanged = false;
 
 // Function prototypes
 float readPressure();
-void updateDisplay();
 void setupWiFi();
 void resetSettings();
 void handleBackflush();
@@ -100,20 +101,11 @@ void setup() {
   // Initialize I2C
   Wire.begin();
   
-  // Initialize OLED display
-  if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;); // Don't proceed, loop forever
-  }
-  
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("Pool Filter"));
-  display.println(F("Pressure Reader"));
-  display.println(F("Initializing..."));
-  display.display();
+  // Initialize Display Manager
+  displayManager = new Display(display, currentPressure, backflushThreshold, 
+                             backflushDuration, backflushActive, backflushStartTime);
+  displayManager->init();
+  displayManager->showStartupScreen();
   
   // Setup WiFi
   setupWiFi();
@@ -134,7 +126,7 @@ void loop() {
   unsigned long currentTime = millis();
   if (currentTime - lastReadTime >= readInterval) {
     currentPressure = readPressure();
-    updateDisplay();
+    displayManager->updateDisplay();
     lastReadTime = currentTime;
   }
   
@@ -173,86 +165,17 @@ float readPressure() {
   return pressure;
 }
 
-void updateDisplay() {
-  display.clearDisplay();
-  
-  // Display WiFi status in top row with signal bars
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  
-  // WiFi status indicator
-  if (WiFi.status() == WL_CONNECTED) {
-    int rssi = WiFi.RSSI();
-    // Draw WiFi signal bars
-    if (rssi > -50) {
-      display.print(F("WiFi:[||||]"));
-    } else if (rssi > -65) {
-      display.print(F("WiFi:[||| ]"));
-    } else if (rssi > -75) {
-      display.print(F("WiFi:[||  ]"));
-    } else if (rssi > -85) {
-      display.print(F("WiFi:[|   ]"));
-    } else {
-      display.print(F("WiFi:[    ]"));
-    }
-    
-    // Show IP address
-    display.setCursor(70, 0);
-    display.print(WiFi.localIP()[3]); // Just show last octet to save space
-  } else {
-    display.print(F("WiFi:[X]"));
-  }
-  
-  // Display pressure in large font in center
-  display.setTextSize(3);
-  display.setCursor(10, 20);
-  display.print(currentPressure, 1);
-  
-  // Display bar unit
-  display.setTextSize(2);
-  display.setCursor(90, 30);
-  display.print(F("bar"));
-  
-  // Display backflush status at bottom
-  display.setTextSize(1);
-  display.setCursor(0, 56);
-  if (backflushActive) {
-    unsigned long elapsedTime = (millis() - backflushStartTime) / 1000;
-    display.print(F("BACKFLUSH: "));
-    display.print(elapsedTime);
-    display.print(F("/"));
-    display.print(backflushDuration);
-    display.print(F("s"));
-  } else {
-    display.print(F("Threshold: "));
-    display.print(backflushThreshold, 1);
-    display.print(F(" bar"));
-  }
-  
-  display.display();
-}
+
 
 void setupWiFi() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.println(F("Connecting to WiFi..."));
-  display.display();
+  displayManager->showWiFiConnecting();
   
   // Initialize WiFiManager
   WiFiManager wifiManager;
   
   // Set callback for when entering configuration mode
   wifiManager.setAPCallback([](WiFiManager* mgr) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.println(F("WiFi Setup Mode"));
-    display.println(F("Connect to:"));
-    display.println(WIFI_AP_NAME);
-    display.println(F("Then go to:"));
-    display.println(F("192.168.4.1"));
-    display.display();
+    displayManager->showWiFiSetupMode(WIFI_AP_NAME);
   });
   
   // Try to connect using saved credentials
@@ -278,14 +201,7 @@ void setupWiFi() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println(F("WiFi Connected!"));
-  display.print(F("SSID: "));
-  display.println(WiFi.SSID());
-  display.print(F("IP: "));
-  display.println(WiFi.localIP());
-  display.display();
+  displayManager->showWiFiConnected(WiFi.SSID(), WiFi.localIP());
   delay(2000);
 }
 
@@ -328,13 +244,7 @@ void saveBackflushConfig() {
 
 void resetSettings() {
   // Display reset message
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("RESET BUTTON PRESSED"));
-  display.println(F("Clearing WiFi settings"));
-  display.display();
+  displayManager->showResetMessage();
   
   // Clear WiFiManager settings
   WiFiManager wifiManager;
