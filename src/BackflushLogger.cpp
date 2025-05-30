@@ -96,9 +96,9 @@ bool BackflushLogger::saveEvents() {
     return true;
 }
 
-bool BackflushLogger::logEvent(float pressure, unsigned int duration) {
+void BackflushLogger::logEvent(float pressure, unsigned int duration) {
     if (!initialized || !timeManager.isTimeInitialized()) {
-        return false;
+        return;
     }
     
     // Create new event
@@ -110,13 +110,16 @@ bool BackflushLogger::logEvent(float pressure, unsigned int duration) {
     // Add to events list
     events.push_back(event);
     
-    // If we have too many events, remove the oldest one
+    // If we have too many events, trim them
     if (events.size() > MAX_EVENTS) {
-        events.erase(events.begin());
+        trimOldEvents(MAX_EVENTS);
     }
     
+    // Check available space
+    checkSpaceAndTrim();
+    
     // Save events to file
-    return saveEvents();
+    saveEvents();
 }
 
 String BackflushLogger::getEventsAsJson() {
@@ -194,7 +197,78 @@ String BackflushLogger::getEventsAsHtml() {
     return html;
 }
 
-void BackflushLogger::clearEvents() {
+bool BackflushLogger::clearEvents() {
+    // Clear events
     events.clear();
-    saveEvents();
+    
+    // Delete file
+    if (LittleFS.exists(LOG_FILE)) {
+        if (!LittleFS.remove(LOG_FILE)) {
+            Serial.println("Failed to delete backflush log file");
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+void BackflushLogger::trimOldEvents(size_t maxEvents) {
+    if (events.size() <= maxEvents) {
+        return;
+    }
+    
+    // Calculate how many events to remove
+    size_t entriesToRemove = events.size() - maxEvents;
+    
+    // Remove oldest events
+    events.erase(events.begin(), events.begin() + entriesToRemove);
+    
+    Serial.print("Trimmed ");
+    Serial.print(entriesToRemove);
+    Serial.println(" old backflush events");
+}
+
+bool BackflushLogger::checkSpaceAndTrim() {
+    // Check if filesystem space is low
+    if (checkFileSystemSpace()) {
+        Serial.println("Low space detected, trimming backflush logs");
+        
+        // If we have events, trim them
+        if (!events.empty()) {
+            // Keep only half of the events
+            size_t keepEvents = events.size() / 2;
+            if (keepEvents < 10) {
+                keepEvents = 10; // Keep at least 10 events
+            }
+            trimOldEvents(keepEvents);
+            saveEvents();
+        }
+        
+        return true;
+    }
+    
+    return false;
+}
+
+bool BackflushLogger::checkFileSystemSpace() {
+    FSInfo fs_info;
+    if (!LittleFS.info(fs_info)) {
+        Serial.println("Failed to get filesystem info");
+        return false;
+    }
+    
+    // Calculate available space in KB
+    size_t freeSpace = fs_info.totalBytes - fs_info.usedBytes;
+    size_t freeSpaceKB = freeSpace / 1024;
+    
+    Serial.print("LittleFS: ");
+    Serial.print(fs_info.usedBytes / 1024);
+    Serial.print("KB used, ");
+    Serial.print(freeSpaceKB);
+    Serial.print("KB free, ");
+    Serial.print(fs_info.totalBytes / 1024);
+    Serial.println("KB total");
+    
+    // Return true if free space is less than 10% of total
+    return (freeSpace < (fs_info.totalBytes / 10));
 }

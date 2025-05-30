@@ -21,12 +21,11 @@ public:
     void begin();
     void update();
     bool isTimeInitialized() const { return timeInitialized; }
-    
-    String getFormattedTime(); // Returns HH:MM:SS
-    String getFormattedDate(); // Returns YYYY-MM-DD
-    String getFormattedDateTime(); // Returns YYYY-MM-DD HH:MM:SS
-    
-    time_t getCurrentTime(); // Returns Unix timestamp
+    time_t getCurrentTime() const;
+    String getCurrentTimeStr() const;
+    String formatTime(time_t t) const;
+    String formatDate(time_t t) const;
+    String getFormattedDateTime() const;
 };
 
 #endif // TIMEMANAGER_H

@@ -9,7 +9,8 @@ extern float PRESSURE_MAX;
 
 WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration, 
                      bool& active, unsigned long& startTime, bool& configChanged,
-                     TimeManager& tm, BackflushLogger& logger, Settings& settings)
+                     TimeManager& tm, BackflushLogger& logger, Settings& settings,
+                     PressureLogger& pressureLog)
     : server(80), 
       currentPressure(pressure),
       backflushThreshold(threshold),
@@ -19,16 +20,20 @@ WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration,
       backflushConfigChanged(configChanged),
       timeManager(tm),
       backflushLogger(logger),
-      settings(settings) {
+      settings(settings),
+      pressureLogger(pressureLog) {
 }
 
 void WebServer::begin() {
     // Setup web server routes
-    server.on("/", HTTP_GET, [this](){ this->handleRoot(); });
-    server.on("/api", HTTP_GET, [this](){ this->handleAPI(); });
-    server.on("/backflush", HTTP_POST, [this](){ this->handleBackflushConfig(); });
-    server.on("/log", HTTP_GET, [this](){ this->handleBackflushLog(); });
-    server.on("/clearlog", HTTP_GET, [this](){ this->handleClearLog(); });
+    server.on("/", [this]() { handleRoot(); });
+    server.on("/api", [this]() { handleAPI(); });
+    server.on("/backflush", [this]() { handleBackflushConfig(); });
+    server.on("/log", [this]() { handleBackflushLog(); });
+    server.on("/clearlog", [this]() { handleClearLog(); });
+    server.on("/pressure", [this]() { handlePressureHistory(); });
+    server.on("/clearpressure", [this]() { handleClearPressureHistory(); });
+    
     server.begin();
     Serial.println("HTTP server started");
 }
@@ -95,7 +100,15 @@ void WebServer::handleRoot() {
   } else {
     html += "<p>Backflush threshold: " + String(backflushThreshold, 1) + " bar</p>";
   }
-  html += "</div>\n";
+  html += "    </div>\n";
+  
+  // Add navigation links
+  html += "    <div class='navigation'>\n";
+  html += "      <p>\n";
+  html += "        <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>\n";
+  html += "        <a href='/pressure'>View Pressure History</a>\n";
+  html += "      </p>\n";
+  html += "    </div>\n";
   
   // Add backflush configuration form
   html += "    <div class='backflush-config'>\n";
@@ -254,9 +267,48 @@ void WebServer::handleBackflushLog() {
 }
 
 void WebServer::handleClearLog() {
-  backflushLogger.clearEvents();
-  
-  // Redirect back to log page
-  server.sendHeader("Location", "/log", true);
-  server.send(302, "text/plain", "Redirecting to log page");
+    backflushLogger.clearEvents();
+    server.sendHeader("Location", "/log");
+    server.send(303); // Redirect back to log page
+}
+
+void WebServer::handlePressureHistory() {
+    String html = "<!DOCTYPE html>\n";
+    html += "<html>\n";
+    html += "<head>\n";
+    html += "<meta charset=\"UTF-8\">\n";
+    html += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
+    html += "<title>Pool Pressure History</title>\n";
+    html += "<style>\n";
+    html += "body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }\n";
+    html += "h1 { color: #0066cc; }\n";
+    html += "a { color: #0066cc; text-decoration: none; }\n";
+    html += "a:hover { text-decoration: underline; }\n";
+    html += "button { background-color: #0066cc; color: white; border: none; padding: 8px 16px; cursor: pointer; }\n";
+    html += "button:hover { background-color: #0052a3; }\n";
+    html += "</style>\n";
+    html += "<script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n";
+    html += "</head>\n";
+    html += "<body>\n";
+    html += "<h1>Pool Pressure History</h1>\n";
+    html += "<p>Current time: " + timeManager.getCurrentTimeStr() + "</p>\n";
+    
+    // Add navigation links
+    html += "<p><a href=\"/\">Back to Dashboard</a> | ";
+    html += "<a href=\"/log\">View Backflush Log</a> | ";
+    html += "<a href=\"/clearpressure\" onclick=\"return confirm('Are you sure you want to clear all pressure history?');\">Clear Pressure History</a></p>\n";
+    
+    // Add pressure history chart
+    html += pressureLogger.getReadingsAsHtml();
+    
+    html += "</body>\n";
+    html += "</html>\n";
+    
+    server.send(200, "text/html", html);
+}
+
+void WebServer::handleClearPressureHistory() {
+    pressureLogger.clearReadings();
+    server.sendHeader("Location", "/pressure");
+    server.send(303); // Redirect back to pressure history page
 }

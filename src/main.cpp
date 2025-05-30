@@ -10,6 +10,7 @@
 #include "TimeManager.h"
 #include "Settings.h"
 #include "BackflushLogger.h"
+#include "PressureLogger.h"
 
 // OLED Display Configuration
 #define SCREEN_WIDTH 128
@@ -41,6 +42,7 @@ Display* displayManager;
 TimeManager* timeManager;
 Settings* settings;
 BackflushLogger* backflushLogger;
+PressureLogger* pressureLogger;
 
 // Variables
 float currentPressure = 0.0;
@@ -111,10 +113,14 @@ void setup() {
   backflushLogger = new BackflushLogger(*timeManager);
   backflushLogger->begin();
   
+  // Initialize pressure logger
+  pressureLogger = new PressureLogger(*timeManager);
+  pressureLogger->begin();
+  
   // Initialize web server
   webServer = new WebServer(currentPressure, backflushThreshold, backflushDuration, 
                           backflushActive, backflushStartTime, backflushConfigChanged,
-                          *timeManager, *backflushLogger, *settings);
+                          *timeManager, *backflushLogger, *settings, *pressureLogger);
   webServer->begin();
   
   delay(2000);  // Display startup message for 2 seconds
@@ -133,6 +139,12 @@ void loop() {
     currentPressure = readPressure();
     displayManager->updateDisplay();
     lastReadTime = currentTime;
+    
+    // Record pressure reading if time is initialized
+    if (timeManager->isTimeInitialized()) {
+      pressureLogger->addReading(currentPressure);
+      pressureLogger->update(); // Check if we need to save readings
+    }
   }
   
   // Handle backflush control

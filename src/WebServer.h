@@ -6,6 +6,7 @@
 #include "TimeManager.h"
 #include "BackflushLogger.h"
 #include "Settings.h"
+#include "PressureLogger.h"
 
 class WebServer {
 private:
@@ -19,17 +20,21 @@ private:
     TimeManager& timeManager;
     BackflushLogger& backflushLogger;
     Settings& settings;
+    PressureLogger& pressureLogger;
 
     void handleRoot();
     void handleAPI();
     void handleBackflushConfig();
     void handleBackflushLog();
     void handleClearLog();
+    void handlePressureHistory();
+    void handleClearPressureHistory();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 
               bool& active, unsigned long& startTime, bool& configChanged,
-              TimeManager& tm, BackflushLogger& logger, Settings& settings);
+              TimeManager& tm, BackflushLogger& logger, Settings& settings,
+              PressureLogger& pressureLog);
     void begin();
     void handleClient();
 };

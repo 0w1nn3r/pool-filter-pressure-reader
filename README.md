@@ -9,8 +9,10 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - Web interface for remote monitoring with visual pressure gauge
 - Automatic backflush control with configurable pressure threshold and duration
 - Backflush event logging with date/time stamps and pressure readings
+- Pressure history logging with interactive graph visualization
+- Automatic space management to prevent storage overflow
 - NTP time synchronization for accurate timestamps
-- Persistent settings storage with CRC validation
+- Persistent settings storage using the Preferences library
 - JSON API endpoint for integration with other systems
 - WiFi configuration portal for easy setup
 - Reset button to clear all settings when needed
@@ -118,25 +120,37 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - Real-time pressure display with visual gauge
 - Current time display (synchronized via NTP)
 - Backflush configuration settings
-- Link to backflush event log
+- Links to backflush event log and pressure history
 
 ### Backflush Log Page
 - Table of all backflush events with date, time, pressure, and duration
 - Option to clear the log history
 - Navigation back to the main dashboard
 
+### Pressure History Page
+- Interactive graph showing pressure readings over time
+- Automatic recording of significant pressure changes (0.1 bar or more)
+- Option to clear pressure history
+- Navigation between dashboard and backflush log
+
 ## API Endpoints
 
-- `/` - Main web interface
+- `/` - Main web interface with pressure gauge and backflush configuration
 - `/api` - JSON API with current status and settings
-- `/log` - Backflush event log page
+- `/log` - Backflush event log page with timestamp and pressure data
 - `/clearlog` - Clear the backflush event log (redirects to log page)
+- `/pressure` - Pressure history page with interactive graph
+- `/clearpressure` - Clear the pressure history data (redirects to pressure page)
+- `/backflush` - POST endpoint to configure backflush settings
 
 ## Future Improvements
 
-- Add historical pressure graph
 - Implement alerts for high/low pressure conditions
+- Add data export functionality (CSV download)
 - Support for multiple pressure sensors
 - Add OTA (Over-the-Air) update capability
 - Implement MQTT support for IoT integration
-- Email notifications for backflush events
+- Email or push notifications for backflush events
+- Mobile app integration
+- Weather data correlation with pressure readings
+- Predictive maintenance alerts based on pressure trends
