@@ -61,8 +61,8 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 ## Usage
 
 1. Power on the device
-2. On first boot, the device will create a WiFi access point named "PoolPressure-Setup"
-3. Connect to this network with password "poolsetup"
+2. On first boot, the device will create an open WiFi access point named "PoolPressure-Setup"
+3. Connect to this network (no password required)
 4. A configuration portal will automatically open (or navigate to 192.168.4.1)
 5. Enter your WiFi credentials in the portal
 6. After connecting, the OLED display will show the current pressure and WiFi status

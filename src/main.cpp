@@ -24,7 +24,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // WiFi Configuration
 #define WIFI_AP_NAME "PoolPressure-Setup"
-#define WIFI_AP_PASSWORD "poolsetup"
 
 // Reset Button Configuration
 #define RESET_BUTTON_PIN D3  // GPIO0 (D3) for reset button
@@ -250,8 +249,6 @@ void setupWiFi() {
     display.println(F("WiFi Setup Mode"));
     display.println(F("Connect to:"));
     display.println(WIFI_AP_NAME);
-    display.println(F("Password:"));
-    display.println(WIFI_AP_PASSWORD);
     display.println(F("Then go to:"));
     display.println(F("192.168.4.1"));
     display.display();
@@ -260,7 +257,7 @@ void setupWiFi() {
   // Try to connect using saved credentials
   // If connection fails, it will start an access point with the specified name
   // and go into a blocking loop awaiting configuration
-  if (!wifiManager.autoConnect(WIFI_AP_NAME, WIFI_AP_PASSWORD)) {
+  if (!wifiManager.autoConnect(WIFI_AP_NAME)) {
     Serial.println("Failed to connect and hit timeout");
     display.clearDisplay();
     display.setCursor(0, 0);
