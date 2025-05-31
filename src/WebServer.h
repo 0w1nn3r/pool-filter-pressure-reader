@@ -29,6 +29,7 @@ private:
     void handleClearLog();
     void handlePressureHistory();
     void handleClearPressureHistory();
+    void handleWiFiReset();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 

@@ -33,6 +33,7 @@ void WebServer::begin() {
     server.on("/clearlog", [this]() { handleClearLog(); });
     server.on("/pressure", [this]() { handlePressureHistory(); });
     server.on("/clearpressure", [this]() { handleClearPressureHistory(); });
+    server.on("/wifireset", [this]() { handleWiFiReset(); });
     
     server.begin();
     Serial.println("HTTP server started");
@@ -106,7 +107,8 @@ void WebServer::handleRoot() {
   html += "    <div class='navigation'>\n";
   html += "      <p>\n";
   html += "        <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>\n";
-  html += "        <a href='/pressure'>View Pressure History</a>\n";
+  html += "        <a href='/pressure' style='margin-right: 15px;'>View Pressure History</a>\n";
+  html += "        <a href='/wifireset'>WiFi Settings</a>\n";
   html += "      </p>\n";
   html += "    </div>\n";
   
@@ -311,4 +313,59 @@ void WebServer::handleClearPressureHistory() {
     pressureLogger.clearReadings();
     server.sendHeader("Location", "/pressure");
     server.send(303); // Redirect back to pressure history page
+}
+
+void WebServer::handleWiFiReset() {
+    String html = "<!DOCTYPE html>\n";
+    html += "<html>\n";
+    html += "<head>\n";
+    html += "  <title>WiFi Settings</title>\n";
+    html += "  <meta name='viewport' content='width=device-width, initial-scale=1'>\n";
+    html += "  <style>\n";
+    html += "    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; }\n";
+    html += "    .container { max-width: 600px; margin: 0 auto; }\n";
+    html += "    h1 { color: #2c3e50; }\n";
+    html += "    .info { margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px; }\n";
+    html += "    .button { display: inline-block; padding: 12px 24px; background-color: #e74c3c; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; font-weight: bold; }\n";
+    html += "    .button:hover { background-color: #c0392b; }\n";
+    html += "    .back-link { display: block; margin-top: 30px; color: #3498db; }\n";
+    html += "  </style>\n";
+    html += "</head>\n";
+    html += "<body>\n";
+    html += "  <div class='container'>\n";
+    html += "    <h1>WiFi Settings</h1>\n";
+    
+    html += "    <div class='info'>\n";
+    html += "      <p>Current WiFi Network: <strong>" + WiFi.SSID() + "</strong></p>\n";
+    html += "      <p>IP Address: " + WiFi.localIP().toString() + "</p>\n";
+    html += "      <p>Signal Strength: " + String(WiFi.RSSI()) + " dBm</p>\n";
+    html += "    </div>\n";
+    
+    html += "    <div class='info'>\n";
+    html += "      <p>To change WiFi settings, click the button below.</p>\n";
+    html += "      <p>The device will restart in configuration mode, creating a WiFi access point named <strong>PoolFilterAP</strong>.</p>\n";
+    html += "      <p>Connect to this network and navigate to <strong>192.168.4.1</strong> to configure your new WiFi settings.</p>\n";
+    html += "    </div>\n";
+    
+    // Add confirmation form with POST method for security
+    html += "    <form method='POST' onsubmit='return confirm(\"Are you sure you want to reset WiFi settings? The device will restart.\");'>\n";
+    html += "      <button type='submit' name='reset' value='true' class='button'>Reset WiFi Settings</button>\n";
+    html += "    </form>\n";
+    
+    html += "    <a href='/' class='back-link'>Back to Home</a>\n";
+    html += "  </div>\n";
+    html += "</body>\n";
+    html += "</html>\n";
+    
+    // Check if this is a POST request to reset WiFi
+    if (server.method() == HTTP_POST && server.hasArg("reset")) {
+        server.send(200, "text/html", "<html><body><h1>Resetting WiFi settings...</h1><p>The device will restart in configuration mode.</p></body></html>");
+        delay(1000);
+        // Reset WiFi settings and restart
+        WiFi.disconnect(true);
+        delay(1000);
+        ESP.restart();
+    } else {
+        server.send(200, "text/html", html);
+    }
 }

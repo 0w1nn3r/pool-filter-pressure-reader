@@ -4,14 +4,15 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 
 ## Features
 
-- Real-time pressure monitoring with analog pressure sensor (displayed in bar)
-- Optional OLED display (128x64) showing current pressure with WiFi signal strength indicator
-- Headless operation support - can function without OLED display connected
+- Real-time pressure monitoring with analog pressure sensor
+- OLED display showing current pressure and WiFi status (optional - system works without display)
 - Web interface for remote monitoring with visual pressure gauge
-- Automatic backflush control with configurable pressure threshold and duration
-- Backflush event logging with date/time stamps and pressure readings
-- Pressure history logging with interactive graph visualization
-- Automatic space management to prevent storage overflow
+- Automatic backflush control with configurable threshold and duration
+- Backflush event logging with timestamps and pressure readings
+- NTP time synchronization for accurate timestamps
+- Pressure history logging with graphical display
+- Automatic space management to prevent running out of storage
+- WiFi settings management directly from the web interface
 - NTP time synchronization for accurate timestamps
 - Persistent settings storage using the Preferences library
 - JSON API endpoint for integration with other systems
@@ -123,7 +124,7 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - Real-time pressure display with visual gauge
 - Current time display (synchronized via NTP)
 - Backflush configuration settings
-- Links to backflush event log and pressure history
+- Links to backflush event log, pressure history, and WiFi settings
 
 ### Backflush Log Page
 - Table of all backflush events with date, time, pressure, and duration
@@ -136,6 +137,11 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - Option to clear pressure history
 - Navigation between dashboard and backflush log
 
+### WiFi Settings Page
+- Display current WiFi network information (SSID, IP address, signal strength)
+- Option to reset WiFi settings and enter configuration mode
+- Automatically creates an access point for new WiFi setup
+
 ## API Endpoints
 
 - `/` - Main web interface with pressure gauge and backflush configuration
@@ -144,6 +150,7 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - `/clearlog` - Clear the backflush event log (redirects to log page)
 - `/pressure` - Pressure history page with interactive graph
 - `/clearpressure` - Clear the pressure history data (redirects to pressure page)
+- `/wifireset` - WiFi settings page with option to reset WiFi configuration
 - `/backflush` - POST endpoint to configure backflush settings
 
 ## Future Improvements
