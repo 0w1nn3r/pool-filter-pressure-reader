@@ -13,8 +13,7 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - Pressure history logging with graphical display
 - Automatic space management to prevent running out of storage
 - WiFi settings management directly from the web interface
-- NTP time synchronization for accurate timestamps
-- Persistent settings storage using the Preferences library
+- Persistent settings storage using the EEPROM
 - JSON API endpoint for integration with other systems
 - WiFi configuration portal for easy setup
 - Reset button to clear all settings when needed
@@ -157,6 +156,7 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 
 ## Future Improvements
 
+- Control of circulation pump
 - Implement alerts for high/low pressure conditions
 - Add data export functionality (CSV download)
 - Support for multiple pressure sensors
@@ -164,5 +164,10 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - Implement MQTT support for IoT integration
 - Email or push notifications for backflush events
 - Mobile app integration
-- Weather data correlation with pressure readings
 - Predictive maintenance alerts based on pressure trends
+
+## Screenshots
+
+<img width="819" alt="Screenshot 2025-05-31 at 10 48 08" src="https://github.com/user-attachments/assets/6109c096-1ad7-4dc5-9fb5-ca21ab407440" />
+
+<img width="1381" alt="Screenshot 2025-05-31 at 18 24 52" src="https://github.com/user-attachments/assets/758b265a-4bcf-4d9f-94f2-9a7130f6151f" />
