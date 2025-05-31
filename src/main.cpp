@@ -34,7 +34,10 @@ float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (adjust based on your sens
 #define RESET_BUTTON_PIN D3  // GPIO0 (D3) for reset button
 
 // Backflush Relay Configuration
-#define RELAY_PIN D5          // GPIO14 (D5) for backflush relay
+const int RELAY_PIN = D5;          // GPIO14 (D5) for backflush relay
+
+// Onboard LED Configuration
+const int LED_PIN = D4;   // Onboard LED (usually GPIO2/D4 on NodeMCU)
 
 // System components
 WebServer* webServer;
@@ -73,6 +76,11 @@ void setup() {
   // Initialize relay pin
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);  // Ensure relay is off at startup
+  
+  // Initialize onboard LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, HIGH);  // LED is off when HIGH on NodeMCU (inverse logic)
+  Serial.println("LED initialized");
   
   // Initialize settings
   settings = new Settings();
@@ -239,6 +247,7 @@ void handleBackflush() {
     backflushActive = true;
     backflushStartTime = millis();
     digitalWrite(RELAY_PIN, HIGH);  // Activate relay
+    digitalWrite(LED_PIN, LOW);    // Turn LED ON (inverse logic on NodeMCU)
     Serial.println("Backflush started");
   }
   
@@ -249,6 +258,7 @@ void handleBackflush() {
       // Stop backflush
       backflushActive = false;
       digitalWrite(RELAY_PIN, LOW);  // Deactivate relay
+      digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
       Serial.println("Backflush completed");
       
       // Log the backflush event

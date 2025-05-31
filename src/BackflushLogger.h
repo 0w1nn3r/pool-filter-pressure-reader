@@ -12,6 +12,7 @@ struct BackflushEvent {
     time_t timestamp;
     float pressure;
     unsigned int duration;
+    String type;  // "Auto" or "Manual"
 };
 
 class BackflushLogger {
@@ -31,7 +32,7 @@ public:
     BackflushLogger(TimeManager& tm);
     
     void begin();
-    void logEvent(float pressure, unsigned int duration);
+    void logEvent(float pressure, unsigned int duration, const String& type = "Auto");
     
     // Get events for web display
     String getEventsAsJson();

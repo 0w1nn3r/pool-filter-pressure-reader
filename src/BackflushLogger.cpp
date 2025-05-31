@@ -59,6 +59,14 @@ bool BackflushLogger::loadEvents() {
         event.timestamp = eventObj["timestamp"].as<time_t>();
         event.pressure = eventObj["pressure"].as<float>();
         event.duration = eventObj["duration"].as<unsigned int>();
+        
+        // Load type if available, default to "Auto" for backward compatibility
+        if (eventObj.containsKey("type")) {
+            event.type = eventObj["type"].as<String>();
+        } else {
+            event.type = "Auto";
+        }
+        
         events.push_back(event);
     }
     
@@ -78,6 +86,7 @@ bool BackflushLogger::saveEvents() {
         eventObj["timestamp"] = event.timestamp;
         eventObj["pressure"] = event.pressure;
         eventObj["duration"] = event.duration;
+        eventObj["type"] = event.type.length() > 0 ? event.type : "Auto";
     }
     
     // Open file for writing
@@ -96,7 +105,7 @@ bool BackflushLogger::saveEvents() {
     return true;
 }
 
-void BackflushLogger::logEvent(float pressure, unsigned int duration) {
+void BackflushLogger::logEvent(float pressure, unsigned int duration, const String& type) {
     if (!initialized || !timeManager.isTimeInitialized()) {
         return;
     }
@@ -106,6 +115,7 @@ void BackflushLogger::logEvent(float pressure, unsigned int duration) {
     event.timestamp = timeManager.getCurrentTime();
     event.pressure = pressure;
     event.duration = duration;
+    event.type = type;
     
     // Add to events list
     events.push_back(event);
@@ -144,6 +154,7 @@ String BackflushLogger::getEventsAsJson() {
         
         eventObj["pressure"] = event.pressure;
         eventObj["duration"] = event.duration;
+        eventObj["type"] = event.type.length() > 0 ? event.type : "Auto";
     }
     
     // Serialize JSON to string
@@ -159,6 +170,7 @@ String BackflushLogger::getEventsAsHtml() {
     html += "    <th>Time</th>\n";
     html += "    <th>Pressure (bar)</th>\n";
     html += "    <th>Duration (sec)</th>\n";
+    html += "    <th>Type</th>\n";
     html += "  </tr>\n";
     
     // Sort events by timestamp (newest first)
@@ -185,6 +197,7 @@ String BackflushLogger::getEventsAsHtml() {
         html += "    <td>" + String(time) + "</td>\n";
         html += "    <td>" + String(event.pressure, 1) + "</td>\n";
         html += "    <td>" + String(event.duration) + "</td>\n";
+        html += "    <td>" + (event.type.length() > 0 ? event.type : "Auto") + "</td>\n";
         html += "  </tr>\n";
     }
     

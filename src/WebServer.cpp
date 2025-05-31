@@ -34,7 +34,8 @@ void WebServer::begin() {
     server.on("/pressure", [this]() { handlePressureHistory(); });
     server.on("/clearpressure", [this]() { handleClearPressureHistory(); });
     server.on("/wifireset", [this]() { handleWiFiReset(); });
-    server.on("/manualbackflush", [this]() { handleManualBackflush(); });
+    server.on("/manualbackflush", HTTP_POST, std::bind(&WebServer::handleManualBackflush, this));
+    server.on("/stopbackflush", HTTP_POST, std::bind(&WebServer::handleStopBackflush, this));
     
     server.begin();
     Serial.println("HTTP server started");
@@ -99,6 +100,9 @@ void WebServer::handleRoot() {
   if (backflushActive) {
     unsigned long elapsedTime = (millis() - backflushStartTime) / 1000;
     html += "<p class='active'>BACKFLUSH ACTIVE: " + String(elapsedTime) + "/" + String(backflushDuration) + " seconds</p>";
+    html += "<form method='POST' action='/stopbackflush' onsubmit='return confirm(\"Stop backflush now?\");'>";
+    html += "<button type='submit' class='button' style='background-color: #f44336; margin-top: 10px;'>Stop Backflush</button>";
+    html += "</form>";
   } else {
     html += "<p>Backflush threshold: " + String(backflushThreshold, 1) + " bar</p>";
     html += "<form method='POST' action='/manualbackflush' onsubmit='return confirm(\"Start backflush now?\");'>";
@@ -393,11 +397,42 @@ void WebServer::handleManualBackflush() {
     backflushStartTime = millis();
     
     // Log the manual backflush event
-    backflushLogger.logEvent(currentPressure, backflushDuration);
+    backflushLogger.logEvent(currentPressure, backflushDuration, "Manual");
     
     Serial.println("Manual backflush started");
     
     // Redirect back to the main page
     server.sendHeader("Location", "/");
     server.send(303);
+}
+
+void WebServer::handleStopBackflush() {
+    if (!backflushActive) {
+        server.send(400, "text/plain", "No backflush active");
+        return;
+    }
+    
+    // Calculate actual duration
+    unsigned long elapsedTime = (millis() - backflushStartTime) / 1000;
+    
+    // Deactivate backflush
+    backflushActive = false;
+    
+    // Turn off relay and LED
+    digitalWrite(RELAY_PIN, LOW);  // Deactivate relay
+    digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
+    Serial.println("Manual backflush stopped");
+    
+    // Log the stopped backflush with actual duration
+    String eventType = "Manual-Stopped";
+    backflushLogger.logEvent(currentPressure, elapsedTime, eventType);
+    
+    Serial.println("Backflush stopped manually");
+    Serial.print("Actual duration: ");
+    Serial.print(elapsedTime);
+    Serial.println(" seconds");
+    
+    // Redirect back to main page
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "Redirecting to main page");
 }

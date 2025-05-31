@@ -3,10 +3,15 @@
 
 #include <Arduino.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>
 #include "TimeManager.h"
 #include "BackflushLogger.h"
 #include "Settings.h"
 #include "PressureLogger.h"
+
+// External pin definitions from main.cpp
+extern const int RELAY_PIN;
+extern const int LED_PIN;
 
 class WebServer {
 private:
@@ -31,6 +36,7 @@ private:
     void handleClearPressureHistory();
     void handleWiFiReset();
     void handleManualBackflush();
+    void handleStopBackflush();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 
