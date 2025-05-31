@@ -34,6 +34,7 @@ void WebServer::begin() {
     server.on("/pressure", [this]() { handlePressureHistory(); });
     server.on("/clearpressure", [this]() { handleClearPressureHistory(); });
     server.on("/wifireset", [this]() { handleWiFiReset(); });
+    server.on("/manualbackflush", [this]() { handleManualBackflush(); });
     
     server.begin();
     Serial.println("HTTP server started");
@@ -93,13 +94,16 @@ void WebServer::handleRoot() {
   html += "    </div>\n";
   html += "    <p>Last updated: " + String(millis() / 1000) + " seconds ago</p>\n";
   
-  // Add backflush status
+  // Add backflush status and manual trigger button
   html += "    <div class='status'>";
   if (backflushActive) {
     unsigned long elapsedTime = (millis() - backflushStartTime) / 1000;
     html += "<p class='active'>BACKFLUSH ACTIVE: " + String(elapsedTime) + "/" + String(backflushDuration) + " seconds</p>";
   } else {
     html += "<p>Backflush threshold: " + String(backflushThreshold, 1) + " bar</p>";
+    html += "<form method='POST' action='/manualbackflush' onsubmit='return confirm(\"Start backflush now?\");'>";
+    html += "<button type='submit' class='button' style='background-color: #4CAF50; margin-top: 10px;'>Backflush Now</button>";
+    html += "</form>";
   }
   html += "    </div>\n";
   
@@ -368,4 +372,32 @@ void WebServer::handleWiFiReset() {
     } else {
         server.send(200, "text/html", html);
     }
+}
+
+void WebServer::handleManualBackflush() {
+    // Only process POST requests for security
+    if (server.method() != HTTP_POST) {
+        server.sendHeader("Location", "/");
+        server.send(303); // Redirect to main page
+        return;
+    }
+    
+    // Don't start a new backflush if one is already active
+    if (backflushActive) {
+        server.send(200, "text/html", "<html><body><h1>Backflush Already Active</h1><p>A backflush operation is already in progress.</p><p><a href='/'>Return to Dashboard</a></p></body></html>");
+        return;
+    }
+    
+    // Start a backflush operation
+    backflushActive = true;
+    backflushStartTime = millis();
+    
+    // Log the manual backflush event
+    backflushLogger.logEvent(currentPressure, backflushDuration);
+    
+    Serial.println("Manual backflush started");
+    
+    // Redirect back to the main page
+    server.sendHeader("Location", "/");
+    server.send(303);
 }

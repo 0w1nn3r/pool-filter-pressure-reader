@@ -124,6 +124,7 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - Real-time pressure display with visual gauge
 - Current time display (synchronized via NTP)
 - Backflush configuration settings
+- Manual backflush trigger button
 - Links to backflush event log, pressure history, and WiFi settings
 
 ### Backflush Log Page
@@ -151,6 +152,7 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - `/pressure` - Pressure history page with interactive graph
 - `/clearpressure` - Clear the pressure history data (redirects to pressure page)
 - `/wifireset` - WiFi settings page with option to reset WiFi configuration
+- `/manualbackflush` - POST endpoint to trigger a manual backflush operation
 - `/backflush` - POST endpoint to configure backflush settings
 
 ## Future Improvements
