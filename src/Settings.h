@@ -12,11 +12,13 @@ private:
     // Default values
     static constexpr float DEFAULT_BACKFLUSH_THRESHOLD = 2.0f;
     static constexpr unsigned int DEFAULT_BACKFLUSH_DURATION = 30;
+    static constexpr float DEFAULT_SENSOR_MAX_PRESSURE = 4.0f;
     
     // Namespace and keys
     static constexpr const char* NAMESPACE = "poolfilter";
     static constexpr const char* KEY_THRESHOLD = "threshold";
     static constexpr const char* KEY_DURATION = "duration";
+    static constexpr const char* KEY_SENSOR_MAX = "sensormax";
     
     void setDefaults();
 
@@ -29,9 +31,10 @@ public:
     // Getters and setters
     float getBackflushThreshold();
     unsigned int getBackflushDuration();
-    
+    float getSensorMaxPressure();
     void setBackflushThreshold(float threshold);
     void setBackflushDuration(unsigned int duration);
+    void setSensorMaxPressure(float maxPressure);
 };
 
 #endif // SETTINGS_H

@@ -22,7 +22,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 // Pressure Sensor Configuration
 #define PRESSURE_PIN A0  // Analog pin for pressure sensor
 #define PRESSURE_MIN 0.0   // Minimum pressure in bar
-float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (adjust based on your sensor)
+float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (will be updated from settings)
 #define VOLTAGE_MIN 0.5    // Minimum voltage output (V)
 #define VOLTAGE_MAX 4.5    // Maximum voltage output (V)
 #define ADC_RESOLUTION 1024.0  // 10-bit ADC resolution
@@ -94,12 +94,15 @@ void setup() {
   // Load settings
   backflushThreshold = settings->getBackflushThreshold();
   backflushDuration = settings->getBackflushDuration();
+  PRESSURE_MAX = settings->getSensorMaxPressure();
   
   Serial.print("Loaded backflush threshold: ");
   Serial.print(backflushThreshold);
   Serial.print(" bar, duration: ");
   Serial.print(backflushDuration);
-  Serial.println(" seconds");
+  Serial.print(" seconds, sensor max pressure: ");
+  Serial.print(PRESSURE_MAX);
+  Serial.println(" bar");
   
   // Initialize I2C
   Wire.begin();

@@ -37,6 +37,8 @@ private:
     void handleWiFiReset();
     void handleManualBackflush();
     void handleStopBackflush();
+    void handleSettings();
+    void handleSensorConfig();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 

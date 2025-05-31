@@ -36,6 +36,8 @@ void WebServer::begin() {
     server.on("/wifireset", [this]() { handleWiFiReset(); });
     server.on("/manualbackflush", HTTP_POST, std::bind(&WebServer::handleManualBackflush, this));
     server.on("/stopbackflush", HTTP_POST, std::bind(&WebServer::handleStopBackflush, this));
+    server.on("/settings", [this]() { handleSettings(); });
+    server.on("/sensorconfig", HTTP_POST, std::bind(&WebServer::handleSensorConfig, this));
     
     server.begin();
     Serial.println("HTTP server started");
@@ -116,6 +118,7 @@ void WebServer::handleRoot() {
   html += "      <p>\n";
   html += "        <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>\n";
   html += "        <a href='/pressure' style='margin-right: 15px;'>View Pressure History</a>\n";
+  html += "        <a href='/settings' style='margin-right: 15px;'>Sensor Settings</a>\n";
   html += "        <a href='/wifireset'>WiFi Settings</a>\n";
   html += "      </p>\n";
   html += "    </div>\n";
@@ -435,4 +438,106 @@ void WebServer::handleStopBackflush() {
     // Redirect back to main page
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "Redirecting to main page");
+}
+
+void WebServer::handleSettings() {
+  String html = "<!DOCTYPE html>\n";
+  html += "<html>\n";
+  html += "<head>\n";
+  html += "  <title>Sensor Settings</title>\n";
+  html += "  <meta name='viewport' content='width=device-width, initial-scale=1'>\n";
+  html += "  <style>\n";
+  html += "    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }\n";
+  html += "    .container { max-width: 800px; margin: 0 auto; }\n";
+  html += "    h1 { color: #2c3e50; }\n";
+  html += "    .settings-form { margin: 30px 0; padding: 20px; background-color: #f5f5f5; border-radius: 10px; }\n";
+  html += "    .form-group { margin-bottom: 15px; }\n";
+  html += "    label { display: inline-block; width: 200px; text-align: right; margin-right: 10px; }\n";
+  html += "    input[type=number] { width: 80px; padding: 5px; }\n";
+  html += "    button { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }\n";
+  html += "    .button { display: inline-block; padding: 10px 20px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }\n";
+  html += "    .button:hover { opacity: 0.9; }\n";
+  html += "    .status { margin-top: 10px; font-weight: bold; }\n";
+  html += "  </style>\n";
+  html += "</head>\n";
+  html += "<body>\n";
+  html += "  <div class='container'>\n";
+  html += "    <h1>Sensor Settings</h1>\n";
+  
+  // Add current time if available
+  if (timeManager.isTimeInitialized()) {
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + "</p>\n";
+  }
+  
+  // Sensor configuration form
+  html += "    <div class='settings-form'>\n";
+  html += "      <h2>Pressure Sensor Configuration</h2>\n";
+  html += "      <p>Configure your pressure sensor by setting its maximum pressure range.</p>\n";
+  html += "      <form id='sensorForm'>\n";
+  html += "        <div class='form-group'>\n";
+  html += "          <label for='sensormax'>Maximum Pressure (bar):</label>\n";
+  html += "          <input type='number' id='sensormax' name='sensormax' min='1.0' max='10.0' step='0.5' value='" + String(PRESSURE_MAX, 1) + "'>\n";
+  html += "          <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>\n";
+  html += "        </div>\n";
+  html += "        <button type='button' onclick='saveSensorConfig()'>Save Configuration</button>\n";
+  html += "        <p id='configStatus'></p>\n";
+  html += "      </form>\n";
+  html += "    </div>\n";
+  
+  // Add navigation links
+  html += "    <p><a href='/' class='button'>Back to Home</a></p>\n";
+  
+  // Add JavaScript for form submission
+  html += "    <script>\n";
+  html += "      function saveSensorConfig() {\n";
+  html += "        const sensormax = document.getElementById('sensormax').value;\n";
+  html += "        const status = document.getElementById('configStatus');\n";
+  html += "        \n";
+  html += "        fetch('/sensorconfig', {\n";
+  html += "          method: 'POST',\n";
+  html += "          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+  html += "          body: 'sensormax=' + sensormax\n";
+  html += "        })\n";
+  html += "        .then(response => response.text())\n";
+  html += "        .then(data => {\n";
+  html += "          status.textContent = data;\n";
+  html += "          status.style.color = 'green';\n";
+  html += "          setTimeout(() => { status.textContent = ''; }, 3000);\n";
+  html += "        })\n";
+  html += "        .catch(error => {\n";
+  html += "          status.textContent = 'Error: ' + error;\n";
+  html += "          status.style.color = 'red';\n";
+  html += "        });\n";
+  html += "      }\n";
+  html += "    </script>\n";
+  
+  html += "  </div>\n";
+  html += "</body>\n";
+  html += "</html>";
+  
+  server.send(200, "text/html", html);
+}
+void WebServer::handleSensorConfig() {
+  if (server.hasArg("sensormax")) {
+    float newSensorMax = server.arg("sensormax").toFloat();
+    
+    // Validate value
+    if (newSensorMax >= 1.0 && newSensorMax <= 10.0) {
+      // Update global variable
+      PRESSURE_MAX = newSensorMax;
+      
+      // Update settings
+      settings.setSensorMaxPressure(newSensorMax);
+      
+      Serial.print("Sensor max pressure updated to: ");
+      Serial.print(newSensorMax);
+      Serial.println(" bar");
+      
+      server.send(200, "text/plain", "Sensor configuration updated");
+    } else {
+      server.send(400, "text/plain", "Invalid value");
+    }
+  } else {
+    server.send(400, "text/plain", "Missing parameter");
+  }
 }

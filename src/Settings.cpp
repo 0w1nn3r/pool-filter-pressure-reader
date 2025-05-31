@@ -12,6 +12,7 @@ void Settings::begin() {
 void Settings::setDefaults() {
     setBackflushThreshold(DEFAULT_BACKFLUSH_THRESHOLD);
     setBackflushDuration(DEFAULT_BACKFLUSH_DURATION);
+    setSensorMaxPressure(DEFAULT_SENSOR_MAX_PRESSURE);
 }
 
 void Settings::reset() {
@@ -57,5 +58,24 @@ void Settings::setBackflushDuration(unsigned int duration) {
     
     if (duration >= 5 && duration <= 300) {  // 5s to 5min
         preferences.putUInt(KEY_DURATION, duration);
+    }
+}
+
+float Settings::getSensorMaxPressure() {
+    if (!initialized) {
+        return DEFAULT_SENSOR_MAX_PRESSURE;
+    }
+    
+    // Get sensor max pressure with default value if not found
+    return preferences.getFloat(KEY_SENSOR_MAX, DEFAULT_SENSOR_MAX_PRESSURE);
+}
+
+void Settings::setSensorMaxPressure(float maxPressure) {
+    if (!initialized) {
+        return;
+    }
+    
+    if (maxPressure >= 1.0 && maxPressure <= 10.0) {  // 1 to 10 bar range for sensors
+        preferences.putFloat(KEY_SENSOR_MAX, maxPressure);
     }
 }
