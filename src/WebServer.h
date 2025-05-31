@@ -39,6 +39,7 @@ private:
     void handleStopBackflush();
     void handleSettings();
     void handleSensorConfig();
+    void handleSetRetention();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 

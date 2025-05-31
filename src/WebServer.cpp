@@ -38,6 +38,7 @@ void WebServer::begin() {
     server.on("/stopbackflush", HTTP_POST, std::bind(&WebServer::handleStopBackflush, this));
     server.on("/settings", [this]() { handleSettings(); });
     server.on("/sensorconfig", HTTP_POST, std::bind(&WebServer::handleSensorConfig, this));
+    server.on("/setretention", HTTP_POST, std::bind(&WebServer::handleSetRetention, this));
     
     server.begin();
     Serial.println("HTTP server started");
@@ -294,13 +295,19 @@ void WebServer::handlePressureHistory() {
     html += "<title>Pool Pressure History</title>\n";
     html += "<style>\n";
     html += "body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }\n";
-    html += "h1 { color: #0066cc; }\n";
+    html += "h1, h2 { color: #0066cc; }\n";
     html += "a { color: #0066cc; text-decoration: none; }\n";
     html += "a:hover { text-decoration: underline; }\n";
     html += "button { background-color: #0066cc; color: white; border: none; padding: 8px 16px; cursor: pointer; }\n";
     html += "button:hover { background-color: #0052a3; }\n";
+    html += "table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n";
+    html += "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n";
+    html += "th { background-color: #f2f2f2; }\n";
+    html += "tr:nth-child(even) { background-color: #f9f9f9; }\n";
+    html += "#chart-container { width: 100%; height: 300px; margin: 20px 0; }\n";
     html += "</style>\n";
-    html += "<script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n";
+    // Load a simple version of Chart.js
+    html += "<script src=\"https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js\"></script>\n";
     html += "</head>\n";
     html += "<body>\n";
     html += "<h1>Pool Pressure History</h1>\n";
@@ -311,8 +318,97 @@ void WebServer::handlePressureHistory() {
     html += "<a href=\"/log\">View Backflush Log</a> | ";
     html += "<a href=\"/clearpressure\" onclick=\"return confirm('Are you sure you want to clear all pressure history?');\">Clear Pressure History</a></p>\n";
     
-    // Add pressure history chart
-    html += pressureLogger.getReadingsAsHtml();
+    // Add chart container
+    html += "<h2>Pressure History Chart</h2>\n";
+    html += "<div id=\"chart-container\">\n";
+    html += "  <canvas id=\"pressure-chart\"></canvas>\n";
+    html += "</div>\n";
+    
+    // Get pressure data as JSON
+    String jsonData = pressureLogger.getReadingsAsJson();
+    
+    // Add JavaScript for chart
+    html += "<script>\n";
+    html += "  // Parse the pressure data\n";
+    html += "  var pressureData = " + jsonData + ";\n";
+    
+    html += "  // Check if we have data\n";
+    html += "  if (!pressureData || !pressureData.readings || pressureData.readings.length === 0) {\n";
+    html += "    document.getElementById('chart-container').innerHTML = '<p>No pressure readings recorded yet.</p>';\n";
+    html += "  } else {\n";
+    html += "    // Prepare data for Chart.js\n";
+    html += "    var labels = [];\n";
+    html += "    var values = [];\n";
+    
+    html += "    // Sort data by timestamp\n";
+    html += "    pressureData.readings.sort(function(a, b) { return a.time - b.time; });\n";
+    
+    html += "    // Process each reading\n";
+    html += "    for (var i = 0; i < pressureData.readings.length; i++) {\n";
+    html += "      var reading = pressureData.readings[i];\n";
+    html += "      var date = new Date(reading.time * 1000);\n";
+    html += "      labels.push(date.toLocaleDateString() + ' ' + date.toLocaleTimeString());\n";
+    html += "      values.push(reading.pressure);\n";
+    html += "    }\n";
+    
+    html += "    // Create the chart\n";
+    html += "    var ctx = document.getElementById('pressure-chart').getContext('2d');\n";
+    html += "    var chart = new Chart(ctx, {\n";
+    html += "      type: 'line',\n";
+    html += "      data: {\n";
+    html += "        labels: labels,\n";
+    html += "        datasets: [{\n";
+    html += "          label: 'Pressure (bar)',\n";
+    html += "          data: values,\n";
+    html += "          backgroundColor: 'rgba(75, 192, 192, 0.2)',\n";
+    html += "          borderColor: 'rgba(75, 192, 192, 1)',\n";
+    html += "          borderWidth: 2,\n";
+    html += "          pointRadius: 3\n";
+    html += "        }]\n";
+    html += "      },\n";
+    html += "      options: {\n";
+    html += "        responsive: true,\n";
+    html += "        maintainAspectRatio: false,\n";
+    html += "        scales: {\n";
+    html += "          xAxes: [{\n";
+    html += "            ticks: {\n";
+    html += "              maxRotation: 45,\n";
+    html += "              minRotation: 45,\n";
+    html += "              maxTicksLimit: 10\n";
+    html += "            }\n";
+    html += "          }],\n";
+    html += "          yAxes: [{\n";
+    html += "            ticks: {\n";
+    html += "              beginAtZero: false\n";
+    html += "            }\n";
+    html += "          }]\n";
+    html += "        }\n";
+    html += "      }\n";
+    html += "    });\n";
+    html += "  }\n";
+    html += "</script>\n";
+    
+    // Add summary information
+    html += "<script>\n";
+    html += "  // Display summary information if we have data\n";
+    html += "  if (pressureData && pressureData.readings && pressureData.readings.length > 0) {\n";
+    html += "    document.write('<p><strong>Total readings:</strong> ' + pressureData.readings.length + '</p>');\n";
+    html += "    var firstDate = new Date(pressureData.readings[0].time * 1000);\n";
+    html += "    var lastDate = new Date(pressureData.readings[pressureData.readings.length-1].time * 1000);\n";
+    html += "    document.write('<p><strong>Date range:</strong> ' + firstDate.toLocaleString() + ' to ' + lastDate.toLocaleString() + '</p>');\n";
+    html += "  }\n";
+    html += "</script>\n";
+    
+    // Add data retention configuration form
+    html += "<div style=\"margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;\">\n";
+    html += "  <h3>Data Retention Settings</h3>\n";
+    html += "  <form action=\"/setretention\" method=\"post\">\n";
+    html += "    <label for=\"retentionDays\">Keep pressure data for: </label>\n";
+    html += "    <input type=\"number\" id=\"retentionDays\" name=\"retentionDays\" min=\"1\" max=\"90\" value=\"" + String(settings.getDataRetentionDays()) + "\" style=\"width: 60px;\"> days\n";
+    html += "    <button type=\"submit\" style=\"margin-left: 10px;\">Save</button>\n";
+    html += "    <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>\n";
+    html += "  </form>\n";
+    html += "</div>\n";
     
     html += "</body>\n";
     html += "</html>\n";
@@ -518,26 +614,43 @@ void WebServer::handleSettings() {
   server.send(200, "text/html", html);
 }
 void WebServer::handleSensorConfig() {
-  if (server.hasArg("sensormax")) {
-    float newSensorMax = server.arg("sensormax").toFloat();
-    
-    // Validate value
-    if (newSensorMax >= 1.0 && newSensorMax <= 10.0) {
-      // Update global variable
-      PRESSURE_MAX = newSensorMax;
-      
-      // Update settings
-      settings.setSensorMaxPressure(newSensorMax);
-      
-      Serial.print("Sensor max pressure updated to: ");
-      Serial.print(newSensorMax);
-      Serial.println(" bar");
-      
-      server.send(200, "text/plain", "Sensor configuration updated");
-    } else {
-      server.send(400, "text/plain", "Invalid value");
+    if (server.hasArg("sensormax")) {
+        String sensorMaxStr = server.arg("sensormax");
+        float sensorMax = sensorMaxStr.toFloat();
+        
+        // Update the setting
+        settings.setSensorMaxPressure(sensorMax);
+        
+        // Update the global variable
+        PRESSURE_MAX = sensorMax;
+        
+        Serial.print("Sensor max pressure updated to: ");
+        Serial.println(sensorMax);
     }
-  } else {
-    server.send(400, "text/plain", "Missing parameter");
-  }
+    
+    // Redirect back to settings page
+    server.sendHeader("Location", "/settings");
+    server.send(303);
+}
+
+void WebServer::handleSetRetention() {
+    if (server.hasArg("retentionDays")) {
+        String retentionDaysStr = server.arg("retentionDays");
+        unsigned int retentionDays = retentionDaysStr.toInt();
+        
+        // Update the setting
+        settings.setDataRetentionDays(retentionDays);
+        
+        // Immediately prune old data based on new retention period
+        pressureLogger.pruneOldData();
+        pressureLogger.saveReadings();
+        
+        Serial.print("Data retention period updated to: ");
+        Serial.print(retentionDays);
+        Serial.println(" days");
+    }
+    
+    // Redirect back to pressure history page
+    server.sendHeader("Location", "/pressure");
+    server.send(303);
 }

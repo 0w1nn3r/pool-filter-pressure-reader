@@ -13,6 +13,7 @@ void Settings::setDefaults() {
     setBackflushThreshold(DEFAULT_BACKFLUSH_THRESHOLD);
     setBackflushDuration(DEFAULT_BACKFLUSH_DURATION);
     setSensorMaxPressure(DEFAULT_SENSOR_MAX_PRESSURE);
+    setDataRetentionDays(DEFAULT_DATA_RETENTION_DAYS);
 }
 
 void Settings::reset() {
@@ -77,5 +78,25 @@ void Settings::setSensorMaxPressure(float maxPressure) {
     
     if (maxPressure >= 1.0 && maxPressure <= 10.0) {  // 1 to 10 bar range for sensors
         preferences.putFloat(KEY_SENSOR_MAX, maxPressure);
+    }
+}
+
+unsigned int Settings::getDataRetentionDays() {
+    if (!initialized) {
+        return DEFAULT_DATA_RETENTION_DAYS;
+    }
+    
+    // Get retention days with default value if not found
+    return preferences.getUInt(KEY_RETENTION_DAYS, DEFAULT_DATA_RETENTION_DAYS);
+}
+
+void Settings::setDataRetentionDays(unsigned int days) {
+    if (!initialized) {
+        return;
+    }
+    
+    // Limit to reasonable range (1-90 days)
+    if (days >= 1 && days <= 90) {
+        preferences.putUInt(KEY_RETENTION_DAYS, days);
     }
 }

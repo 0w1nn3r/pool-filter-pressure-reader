@@ -3,8 +3,8 @@
 const char* PressureLogger::LOG_FILE = "/pressure_history.json";
 const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.1f; // Record if pressure changes by 0.1 bar or more
 
-PressureLogger::PressureLogger(TimeManager& tm) 
-    : timeManager(tm), initialized(false), lastRecordedPressure(0), lastSaveTime(0) {
+PressureLogger::PressureLogger(TimeManager& tm, Settings& settings) 
+    : timeManager(tm), settings(&settings), initialized(false), lastRecordedPressure(0), lastSaveTime(0) {
 }
 
 void PressureLogger::begin() {
@@ -137,13 +137,74 @@ void PressureLogger::addReading(float pressure) {
     }
 }
 
+void PressureLogger::addReadingWithTimestamp(const PressureReading& reading) {
+    // Check if initialized
+    if (!initialized) {
+        return;
+    }
+    
+    // Add the reading with the provided timestamp
+    readings.push_back(reading);
+    lastRecordedPressure = reading.pressure;
+    
+    // Trim old readings if we exceed maximum
+    if (readings.size() > MAX_READINGS) {
+        trimOldReadings(MAX_READINGS);
+    }
+    
+    // We don't save immediately here as the simulated data generation
+    // will call saveReadings() explicitly after adding all readings
+}
+
 void PressureLogger::update() {
     // Check if we need to save readings
     if (initialized && !readings.empty()) {
         unsigned long currentTime = millis();
         if (currentTime - lastSaveTime >= saveInterval) {
+            // Prune old data based on retention period
+            pruneOldData();
+            
+            // Save readings to file
             saveReadings();
         }
+    }
+}
+
+void PressureLogger::pruneOldData() {
+    if (!initialized || readings.empty() || !settings) {
+        return;
+    }
+    
+    // Get current time
+    time_t currentTime = timeManager.getCurrentTime();
+    if (currentTime < 1609459200) { // Jan 1, 2021 timestamp
+        // Invalid time, don't prune
+        return;
+    }
+    
+    // Get retention period in days
+    unsigned int retentionDays = settings->getDataRetentionDays();
+    
+    // Calculate cutoff time (current time - retention days)
+    time_t cutoffTime = currentTime - (retentionDays * 24 * 60 * 60);
+    
+    // Count readings to remove
+    size_t removeCount = 0;
+    for (const PressureReading& reading : readings) {
+        if (reading.timestamp < cutoffTime) {
+            removeCount++;
+        } else {
+            // Readings are assumed to be in chronological order
+            break;
+        }
+    }
+    
+    // Remove old readings
+    if (removeCount > 0) {
+        readings.erase(readings.begin(), readings.begin() + removeCount);
+        Serial.print("Pruned ");
+        Serial.print(removeCount);
+        Serial.println(" old readings based on retention period");
     }
 }
 
@@ -183,8 +244,8 @@ String PressureLogger::getReadingsAsHtml() {
         return html;
     }
     
-    // Add chart container
-    html += "<div id='chart-container' style='width: 100%; height: 400px;'></div>";
+    // Add chart container with canvas element
+    html += "<div style='width: 100%; height: 400px;'><canvas id='pressure-chart'></canvas></div>";
     
     // Add JavaScript for chart
     html += "<script>";
@@ -198,41 +259,67 @@ String PressureLogger::getReadingsAsHtml() {
     html += "  });";
     html += "}";
     
+    // Sort data by timestamp
+    html += "chartData.sort(function(a, b) { return a.x - b.x; });";
+    
     // Create chart
-    html += "var chart = new Chart(";
-    html += "  document.getElementById('chart-container').getContext('2d'),";
-    html += "  {";
+    html += "document.addEventListener('DOMContentLoaded', function() {";
+    html += "  var ctx = document.getElementById('pressure-chart').getContext('2d');";
+    html += "  var chart = new Chart(ctx, {";
     html += "    type: 'line',";
     html += "    data: {";
     html += "      datasets: [{";
     html += "        label: 'Pressure (bar)',";
     html += "        data: chartData,";
     html += "        borderColor: 'rgb(75, 192, 192)',";
+    html += "        backgroundColor: 'rgba(75, 192, 192, 0.2)',";
+    html += "        borderWidth: 2,";
+    html += "        pointRadius: 3,";
+    html += "        pointHoverRadius: 5,";
     html += "        tension: 0.1";
     html += "      }]";
     html += "    },";
     html += "    options: {";
+    html += "      responsive: true,";
+    html += "      maintainAspectRatio: false,";
     html += "      scales: {";
     html += "        x: {";
     html += "          type: 'time',";
     html += "          time: {";
-    html += "            unit: 'hour'";
+    html += "            unit: 'day',";
+    html += "            displayFormats: {";
+    html += "              day: 'MMM d'";
+    html += "            }";
     html += "          },";
     html += "          title: {";
     html += "            display: true,";
-    html += "            text: 'Time'";
+    html += "            text: 'Date'";
     html += "          }";
     html += "        },";
     html += "        y: {";
+    html += "          beginAtZero: false,";
     html += "          title: {";
     html += "            display: true,";
     html += "            text: 'Pressure (bar)'";
     html += "          }";
     html += "        }";
+    html += "      },";
+    html += "      plugins: {";
+    html += "        legend: {";
+    html += "          position: 'top'";
+    html += "        },";
+    html += "        tooltip: {";
+    html += "          callbacks: {";
+    html += "            title: function(tooltipItems) {";
+    html += "              var date = new Date(tooltipItems[0].raw.x);";
+    html += "              return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();";
+    html += "            }";
+    html += "          }";
+    html += "        }";
     html += "      }";
     html += "    }";
-    html += "  }";
-    html += ");";
+    html += "  });";
+    html += "});";
     html += "</script>";
     
     return html;

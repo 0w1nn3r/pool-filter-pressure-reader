@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <vector>
 #include "TimeManager.h"
+#include "Settings.h"
 
 // Structure to hold pressure reading with timestamp
 struct PressureReading {
@@ -20,6 +21,7 @@ private:
     static const float PRESSURE_CHANGE_THRESHOLD; // Record if pressure changes by this amount
     
     TimeManager& timeManager;
+    Settings* settings; // Reference to settings for data retention period
     std::vector<PressureReading> readings;
     bool initialized;
     float lastRecordedPressure;
@@ -27,14 +29,15 @@ private:
     const unsigned long saveInterval = 300000; // Save to file every 5 minutes
     
     bool loadReadings();
-    bool saveReadings();
     void trimOldReadings(size_t maxEntries);
     
 public:
-    PressureLogger(TimeManager& tm);
+    PressureLogger(TimeManager& tm, Settings& settings);
     
     void begin();
     void addReading(float pressure);
+    void addReadingWithTimestamp(const PressureReading& reading); // Add reading with explicit timestamp
+    bool saveReadings(); // Made public for forced saves
     void update(); // Call this regularly to check if we need to save
     
     // Get readings for web display
@@ -46,6 +49,15 @@ public:
     
     // Check available space
     bool checkSpaceAndTrim();
+    
+    // Get number of readings
+    size_t getReadingCount() { return readings.size(); }
+    
+    // Set settings reference (used when settings are updated)
+    void setSettings(Settings& settings) { this->settings = &settings; }
+    
+    // Prune data older than retention period
+    void pruneOldData();
     
     // Static method to check space on filesystem
     static bool checkFileSystemSpace();
