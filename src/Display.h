@@ -14,17 +14,19 @@ private:
     unsigned int& backflushDuration;
     bool& backflushActive;
     unsigned long& backflushStartTime;
+    bool displayAvailable;
 
 public:
     Display(Adafruit_SSD1306& oled, float& pressure, float& threshold, 
             unsigned int& duration, bool& active, unsigned long& startTime);
-    void init();
+    bool init();
     void showStartupScreen();
     void showWiFiConnecting();
     void showWiFiConnected(String ssid, IPAddress ip);
     void showWiFiSetupMode(String apName);
     void showResetMessage();
     void updateDisplay();
+    bool isDisplayAvailable() const;
 };
 
 #endif // DISPLAY_H

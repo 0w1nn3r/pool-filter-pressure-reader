@@ -7,20 +7,27 @@ Display::Display(Adafruit_SSD1306& oled, float& pressure, float& threshold,
       backflushThreshold(threshold),
       backflushDuration(duration),
       backflushActive(active),
-      backflushStartTime(startTime) {
+      backflushStartTime(startTime),
+      displayAvailable(false) {
 }
 
-void Display::init() {
+bool Display::init() {
+  // Try to initialize the display
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  // Address 0x3C for most 128x64 displays
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;); // Don't proceed, loop forever
+    Serial.println(F("SSD1306 allocation failed - continuing without display"));
+    displayAvailable = false;
+    return false;
   }
   
+  displayAvailable = true;
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
+  return true;
 }
 
 void Display::showStartupScreen() {
+  if (!displayAvailable) return;
+  
   display.clearDisplay();
   display.setTextSize(1);
   display.setCursor(0, 0);
@@ -31,6 +38,8 @@ void Display::showStartupScreen() {
 }
 
 void Display::showWiFiConnecting() {
+  if (!displayAvailable) return;
+  
   display.clearDisplay();
   display.setTextSize(1);
   display.setCursor(0, 0);
@@ -39,6 +48,8 @@ void Display::showWiFiConnecting() {
 }
 
 void Display::showWiFiConnected(String ssid, IPAddress ip) {
+  if (!displayAvailable) return;
+  
   display.clearDisplay();
   display.setCursor(0, 0);
   display.println(F("WiFi Connected!"));
@@ -50,6 +61,8 @@ void Display::showWiFiConnected(String ssid, IPAddress ip) {
 }
 
 void Display::showWiFiSetupMode(String apName) {
+  if (!displayAvailable) return;
+  
   display.clearDisplay();
   display.setTextSize(1);
   display.setCursor(0, 0);
@@ -62,6 +75,8 @@ void Display::showWiFiSetupMode(String apName) {
 }
 
 void Display::showResetMessage() {
+  if (!displayAvailable) return;
+  
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
@@ -72,6 +87,8 @@ void Display::showResetMessage() {
 }
 
 void Display::updateDisplay() {
+  if (!displayAvailable) return;
+  
   display.clearDisplay();
   
   // Display WiFi status in top row with signal bars
@@ -128,4 +145,8 @@ void Display::updateDisplay() {
   }
   
   display.display();
+}
+
+bool Display::isDisplayAvailable() const {
+  return displayAvailable;
 }

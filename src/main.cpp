@@ -99,8 +99,13 @@ void setup() {
   // Initialize Display Manager
   displayManager = new Display(display, currentPressure, backflushThreshold, 
                              backflushDuration, backflushActive, backflushStartTime);
-  displayManager->init();
-  displayManager->showStartupScreen();
+  bool displayInitialized = displayManager->init();
+  if (displayInitialized) {
+    Serial.println("OLED display initialized successfully");
+    displayManager->showStartupScreen();
+  } else {
+    Serial.println("Running without OLED display");
+  }
   
   // Setup WiFi
   setupWiFi();
@@ -119,8 +124,8 @@ void setup() {
   
   // Initialize web server
   webServer = new WebServer(currentPressure, backflushThreshold, backflushDuration, 
-                          backflushActive, backflushStartTime, backflushConfigChanged,
-                          *timeManager, *backflushLogger, *settings, *pressureLogger);
+                           backflushActive, backflushStartTime, backflushConfigChanged,
+                           *timeManager, *backflushLogger, *settings, *pressureLogger);
   webServer->begin();
   
   delay(2000);  // Display startup message for 2 seconds
@@ -201,11 +206,15 @@ void setupWiFi() {
   // and go into a blocking loop awaiting configuration
   if (!wifiManager.autoConnect(WIFI_AP_NAME)) {
     Serial.println("Failed to connect and hit timeout");
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println(F("WiFi setup failed"));
-    display.println(F("Restarting..."));
-    display.display();
+    
+    if (displayManager->isDisplayAvailable()) {
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println(F("WiFi setup failed"));
+      display.println(F("Restarting..."));
+      display.display();
+    }
+    
     delay(3000);
     
     // Reset and try again
@@ -268,24 +277,33 @@ void resetSettings() {
   // Reset settings to defaults
   settings->reset();
   
-  // Visual feedback
-  for (int i = 0; i < 5; i++) {
+  Serial.println("RESET BUTTON PRESSED - Clearing all settings");
+  
+  // Visual feedback if display is available
+  if (displayManager->isDisplayAvailable()) {
+    for (int i = 0; i < 5; i++) {
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println(F("RESET BUTTON PRESSED"));
+      display.println(F("Clearing all settings"));
+      if (i % 2 == 0) {
+        display.println(F("*****************"));
+      }
+      display.display();
+      delay(500);
+    }
+    
     display.clearDisplay();
     display.setCursor(0, 0);
-    display.println(F("RESET BUTTON PRESSED"));
-    display.println(F("Clearing all settings"));
-    if (i % 2 == 0) {
-      display.println(F("*****************"));
-    }
+    display.println(F("All settings cleared"));
+    display.println(F("Restarting..."));
     display.display();
-    delay(500);
+  } else {
+    // Just delay without display
+    delay(2500);
   }
   
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println(F("All settings cleared"));
-  display.println(F("Restarting..."));
-  display.display();
+  Serial.println("All settings cleared. Restarting...");
   delay(2000);
   
   // Restart the ESP

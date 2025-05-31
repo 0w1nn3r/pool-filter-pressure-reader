@@ -5,7 +5,8 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 ## Features
 
 - Real-time pressure monitoring with analog pressure sensor (displayed in bar)
-- OLED display (128x64) showing current pressure with WiFi signal strength indicator
+- Optional OLED display (128x64) showing current pressure with WiFi signal strength indicator
+- Headless operation support - can function without OLED display connected
 - Web interface for remote monitoring with visual pressure gauge
 - Automatic backflush control with configurable pressure threshold and duration
 - Backflush event logging with date/time stamps and pressure readings
@@ -113,6 +114,8 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 - For analog reading issues, ensure the pressure sensor is properly connected to A0
 - If the backflush relay doesn't activate, check the wiring and relay power supply
 - If the device is stuck in a reboot loop, try flashing the firmware again
+- If no OLED display is connected, the system will continue to function normally - use the web interface for monitoring
+- To verify the system is working without a display, check the serial monitor for status messages
 
 ## Web Interface
 
