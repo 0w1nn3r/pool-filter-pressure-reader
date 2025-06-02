@@ -50,6 +50,9 @@ public:
     // Check available space
     bool checkSpaceAndTrim();
     
+    // Get readings as CSV
+    String getReadingsAsCsv();
+    
     // Get number of readings
     size_t getReadingCount() { return readings.size(); }
     

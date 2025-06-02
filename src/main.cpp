@@ -115,7 +115,7 @@ void setup() {
   // Check if reset button is pressed during startup
   if (digitalRead(RESET_BUTTON_PIN) == LOW) {
     // Wait for 3 seconds while button is held
-    int countdownSeconds = 3;
+    unsigned int countdownSeconds = 3;
     unsigned long startTime = millis();
     bool buttonReleased = false;
     

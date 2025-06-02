@@ -61,6 +61,7 @@ void WebServer::begin() {
     server.on("/settings", [this]() { handleSettings(); });
     server.on("/sensorconfig", HTTP_POST, std::bind(&WebServer::handleSensorConfig, this));
     server.on("/setretention", HTTP_POST, std::bind(&WebServer::handleSetRetention, this));
+    server.on("/pressure.csv", [this]() { handlePressureCsv(); });
     
     server.begin();
     Serial.println("HTTP server started");
@@ -402,6 +403,7 @@ void WebServer::handlePressureHistory() {
     // Add navigation links
     html += "<p><a href=\"/\">Back to Dashboard</a> | ";
     html += "<a href=\"/log\">View Backflush Log</a> | ";
+    html += "<a href=\"/pressure.csv\" style=\"background-color: #4CAF50; color: white; padding: 6px 12px; border-radius: 4px; text-decoration: none; margin-right: 10px;\">Export CSV</a> | ";
     html += "<a href=\"/clearpressure\" onclick=\"return confirm('Are you sure you want to clear all pressure history?');\">Clear Pressure History</a></p>\n";
     
     // Add chart container with reset zoom button
@@ -815,6 +817,20 @@ void WebServer::handleSensorConfig() {
     // Return JSON response instead of redirecting
     String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
     server.send(200, "application/json", jsonResponse);
+}
+
+void WebServer::handlePressureCsv() {
+    String csv = pressureLogger.getReadingsAsCsv();
+    
+    // Generate filename with current date
+    time_t now = timeManager.getCurrentTime();
+    struct tm* timeinfo = localtime(&now);
+    char filename[32];
+    strftime(filename, sizeof(filename), "pressure_%Y%m%d.csv", timeinfo);
+    
+    server.sendHeader("Content-Type", "text/csv");
+    server.sendHeader("Content-Disposition", "attachment; filename=" + String(filename));
+    server.send(200, "text/csv", csv);
 }
 
 void WebServer::handleSetRetention() {

@@ -398,6 +398,31 @@ bool PressureLogger::checkSpaceAndTrim() {
     return false;
 }
 
+String PressureLogger::getReadingsAsCsv() {
+    String csv = F("Timestamp,Date,Time,Pressure (bar)\r\n");
+    
+    for (const auto& reading : readings) {
+        // Format date and time
+        struct tm* timeinfo = gmtime(&reading.timestamp);
+        char dateStr[11];
+        char timeStr[9];
+        strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", timeinfo);
+        strftime(timeStr, sizeof(timeStr), "%H:%M:%S", timeinfo);
+        
+        // Add row to CSV
+        csv += String(reading.timestamp);
+        csv += F(",");
+        csv += dateStr;
+        csv += F(",");
+        csv += timeStr;
+        csv += F(",");
+        csv += String(reading.pressure, 2);
+        csv += F("\r\n");
+    }
+    
+    return csv;
+}
+
 bool PressureLogger::checkFileSystemSpace() {
     FSInfo fs_info;
     if (!LittleFS.info(fs_info)) {
