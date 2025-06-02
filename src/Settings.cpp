@@ -1,9 +1,16 @@
 #include "Settings.h"
+#include <LittleFS.h>
 
 Settings::Settings() : initialized(false) {
 }
 
 void Settings::begin() {
+    // Initialize LittleFS
+    if (!LittleFS.begin()) {
+        Serial.println("Failed to mount LittleFS");
+        return;
+    }
+
     // Open preferences with namespace "poolfilter"
     preferences.begin(NAMESPACE, false); // false = read/write mode
     initialized = true;
@@ -17,8 +24,16 @@ void Settings::setDefaults() {
 }
 
 void Settings::reset() {
-    // Clear all preferences
-    preferences.clear();
+    // Close preferences and unmount filesystem
+    preferences.end();
+    LittleFS.end();
+    
+    // Format the entire filesystem
+    LittleFS.format();
+    
+    // Reinitialize filesystem and preferences
+    LittleFS.begin();
+    preferences.begin(NAMESPACE, false);
     
     // Set defaults
     setDefaults();

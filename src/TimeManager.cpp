@@ -39,7 +39,7 @@ bool TimeManager::detectTimezone(const String& ip) {
     // Wait a bit after WiFi connection before making the request
     delay(1000);
 
-    const int maxRetries = 3;
+    const int maxRetries = 5;
     for (int retry = 0; retry < maxRetries; retry++) {
         if (retry > 0) {
             // Wait longer between retries

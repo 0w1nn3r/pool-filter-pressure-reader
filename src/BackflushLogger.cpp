@@ -110,9 +110,9 @@ void BackflushLogger::logEvent(float pressure, unsigned int duration, const Stri
         return;
     }
     
-    // Create new event
+    // Create new event with GMT timestamp
     BackflushEvent event;
-    event.timestamp = timeManager.getCurrentTime();
+    event.timestamp = timeManager.getCurrentGMTTime();
     event.pressure = pressure;
     event.duration = duration;
     event.type = type;

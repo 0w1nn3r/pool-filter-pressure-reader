@@ -43,7 +43,7 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - SDA: D2 (GPIO 4)
 
 ### Reset Button
-- One terminal: D3 (GPIO0)
+- One terminal: D7 (GPIO13)
 - Other terminal: GND
 
 ### Backflush Relay

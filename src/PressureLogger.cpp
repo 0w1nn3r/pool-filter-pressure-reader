@@ -115,19 +115,19 @@ void PressureLogger::addReading(float pressure) {
         return;
     }
     
-    // Get current time
-    time_t currentTime = timeManager.getCurrentTime();
+    // Get current GMT time
+    time_t currentGMTTime = timeManager.getCurrentGMTTime();
     
     // Only record if pressure has changed significantly or it's the first reading
     if (readings.empty() || abs(pressure - lastRecordedPressure) >= PRESSURE_CHANGE_THRESHOLD) {
         // Ensure we have a valid timestamp (after Jan 1, 2021)
-        if (currentTime < 1609459200) { // Jan 1, 2021 timestamp
+        if (currentGMTTime < 1609459200) { // Jan 1, 2021 timestamp
             Serial.println("Invalid timestamp for pressure reading");
             return;
         }
         
         PressureReading reading;
-        reading.timestamp = currentTime;
+        reading.timestamp = currentGMTTime; // Store in GMT
         reading.pressure = pressure;
         
         readings.push_back(reading);

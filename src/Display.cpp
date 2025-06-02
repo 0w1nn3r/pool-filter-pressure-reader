@@ -1,14 +1,15 @@
 #include "Display.h"
 
 Display::Display(Adafruit_SSD1306& oled, float& pressure, float& threshold, 
-                 unsigned int& duration, bool& active, unsigned long& startTime)
+                 unsigned int& duration, bool& active, unsigned long& startTime, TimeManager* tm)
     : display(oled),
       currentPressure(pressure),
       backflushThreshold(threshold),
       backflushDuration(duration),
       backflushActive(active),
       backflushStartTime(startTime),
-      displayAvailable(false) {
+      displayAvailable(false),
+      timeManager(tm) {
 }
 
 bool Display::init() {
@@ -58,6 +59,23 @@ void Display::showWiFiConnected(String ssid, IPAddress ip) {
   display.print(F("IP: "));
   display.println(ip);
   display.display();
+}
+
+void Display::showTimezone() {
+  if (!displayAvailable || !timeManager) return;
+  
+  // Continue from current cursor position
+  if (timeManager->isTimezoneInitialized()) {
+    int32_t offset = timeManager->getTimezoneOffset();
+    int offsetHours = offset / 3600;
+    display.print(F("Timezone: GMT"));
+    if (offsetHours >= 0) display.print(F("+"));
+    display.println(offsetHours);
+  } else {
+    display.println(F("Timezone: UTC"));
+  }
+  display.display();
+  delay(2000);
 }
 
 void Display::showWiFiSetupMode(String apName) {

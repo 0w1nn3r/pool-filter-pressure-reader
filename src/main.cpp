@@ -31,7 +31,7 @@ float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (will be updated from sett
 #define WIFI_AP_NAME "PoolPressure-Setup"
 
 // Reset Button Configuration
-#define RESET_BUTTON_PIN D3  // GPIO0 (D3) for reset button
+#define RESET_BUTTON_PIN D7  // GPIO13 (D7) for reset button - changed from D3 to avoid boot mode issues
 
 // Backflush Relay Configuration
 const int RELAY_PIN = D5;          // GPIO14 (D5) for backflush relay
@@ -88,11 +88,6 @@ void setup() {
   settings = new Settings();
   settings->begin();
   
-  // Check if reset button is pressed during startup
-  if (digitalRead(RESET_BUTTON_PIN) == LOW) {
-    resetSettings();
-  }
-  
   // Load settings
   backflushThreshold = settings->getBackflushThreshold();
   backflushDuration = settings->getBackflushDuration();
@@ -106,27 +101,70 @@ void setup() {
   Serial.print(PRESSURE_MAX);
   Serial.println(" bar");
   
-  // Initialize I2C
+  // Initialize I2C and display
   Wire.begin();
-  
-  // Initialize Display Manager
   displayManager = new Display(display, currentPressure, backflushThreshold, 
-                             backflushDuration, backflushActive, backflushStartTime);
+                             backflushDuration, backflushActive, backflushStartTime, nullptr);
   bool displayInitialized = displayManager->init();
   if (displayInitialized) {
     Serial.println("OLED display initialized successfully");
-    displayManager->showStartupScreen();
   } else {
     Serial.println("Running without OLED display");
   }
   
+  // Check if reset button is pressed during startup
+  if (digitalRead(RESET_BUTTON_PIN) == LOW) {
+    // Wait for 3 seconds while button is held
+    int countdownSeconds = 3;
+    unsigned long startTime = millis();
+    bool buttonReleased = false;
+    
+    while (millis() - startTime < countdownSeconds * 1000) {
+      if (digitalRead(RESET_BUTTON_PIN) == HIGH) {
+        buttonReleased = true;
+        break;
+      }
+      
+      // Update countdown display
+      int remainingSeconds = countdownSeconds - ((millis() - startTime) / 1000);
+      display.clearDisplay();
+      display.setTextSize(1);
+      display.setTextColor(WHITE);
+      display.setCursor(0, 0);
+      display.println(F("Hold for factory reset"));
+      display.println();
+      display.setTextSize(2);
+      display.print(F("  "));
+      display.print(remainingSeconds);
+      display.println(F(" sec"));
+      display.display();
+      
+      delay(100);  // Small delay to prevent display flicker
+    }
+    
+    // If button was held for full duration, reset settings
+    if (!buttonReleased) {
+      resetSettings();
+    }
+    
+    // If button was released early, clear display and continue normal boot
+    display.clearDisplay();
+    display.display();
+  }
+  
+  // Show startup screen
+  displayManager->showStartupScreen();
+  
   // Setup WiFi
   setupWiFi();
   
-  // Initialize time manager
+  // Initialize time manager after WiFi is connected
   timeManager = new TimeManager();
   timeManager->begin();
   
+  displayManager->setTimeManager(timeManager);
+  displayManager->showTimezone();
+
   // Initialize backflush logger
   backflushLogger = new BackflushLogger(*timeManager);
   backflushLogger->begin();
@@ -242,7 +280,6 @@ void setupWiFi() {
   Serial.println(WiFi.localIP());
   
   displayManager->showWiFiConnected(WiFi.SSID(), WiFi.localIP());
-  delay(2000);
 }
 
 void handleBackflush() {
