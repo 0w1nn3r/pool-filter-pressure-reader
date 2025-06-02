@@ -110,7 +110,7 @@ void Display::showResetMessage() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
   display.println(F("RESET BUTTON PRESSED"));
-  display.println(F("Clearing WiFi settings"));
+  display.println(F("Clearing settings"));
   display.display();
 }
 
@@ -144,6 +144,7 @@ void Display::updateDisplay() {
     
     // Show IP address (last two octets)
     display.setCursor(70, 0);
+    display.print(F("IP:"));
     display.print(WiFi.localIP()[2]);
     display.print(".");
     display.print(WiFi.localIP()[3]);

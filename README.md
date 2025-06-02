@@ -88,23 +88,23 @@ The OLED display layout looks like this:
 
 ```
 +----------------------------+
-| WiFi:[||||]           IP:42 |
+| WiFi:[||| ]  IP:2.42       |
 |                            |
 |                            |
-|         2.4                |
-|                 bar        |
+|         1.4     bar        |
+|                            |
 |                            |
 | Threshold: 2.0 bar         |
 +----------------------------+
 ```
 
-The top row shows WiFi signal strength and the last octet of the IP address. The center shows the current pressure reading in bar with large digits for easy reading. The bottom row shows either the backflush threshold or active backflush status with countdown.
+The top row shows WiFi signal strength and the last two octets of the IP address. The center shows the current pressure reading in bar with large digits for easy reading. The bottom row shows either the backflush threshold or active backflush status with countdown.
 
 ### Resetting All Settings
 
 1. Press and hold the reset button while powering on the device
-2. The display will show a reset message
-3. Release the button and the device will clear all settings (WiFi credentials, backflush configuration, etc.)
+2. The display will show a countdown 
+3. Release the button after countdown ends and the device will clear all settings (WiFi credentials, backflush configuration, stored history, etc.)
 4. The device will restart and enter configuration mode
 
 ## Troubleshooting
@@ -121,10 +121,10 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 
 ### Main Dashboard
 - Real-time pressure display with visual gauge
-- Current time display (synchronized via NTP)
+- Current time display (synchronized via NTP and with timezone via IP geolocation)
 - Backflush configuration settings
 - Manual backflush trigger button
-- Links to backflush event log, pressure history, and WiFi settings
+- Links to backflush event log, pressure history, sensor settings,and WiFi settings
 
 ### Backflush Log Page
 - Table of all backflush events with date, time, pressure, and duration
@@ -133,8 +133,11 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 
 ### Pressure History Page
 - Interactive graph showing pressure readings over time
+- Zoom in and out
 - Automatic recording of significant pressure changes (0.1 bar or more)
 - Option to clear pressure history
+- Option to set auto prune age
+- Option to export pressure history as CSV
 - Navigation between dashboard and backflush log
 
 ### WiFi Settings Page
@@ -158,7 +161,6 @@ The top row shows WiFi signal strength and the last octet of the IP address. The
 
 - Control of circulation pump
 - Implement alerts for high/low pressure conditions
-- Add data export functionality (CSV download)
 - Support for multiple pressure sensors
 - Add OTA (Over-the-Air) update capability
 - Implement MQTT support for IoT integration
