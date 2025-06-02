@@ -98,22 +98,27 @@ void Display::updateDisplay() {
   // WiFi status indicator
   if (WiFi.status() == WL_CONNECTED) {
     int rssi = WiFi.RSSI();
-    // Draw WiFi signal bars
+    
+    // Draw WiFi status text and signal bars
+    display.setCursor(0, 0);
+    display.print(F("WiFi:"));
     if (rssi > -55) {
-      display.print(F("WiFi:[||||]"));
+      display.print(F("[||||]"));
     } else if (rssi > -65) {
-      display.print(F("WiFi:[||| ]"));
+      display.print(F("[||| ]"));
     } else if (rssi > -75) {
-      display.print(F("WiFi:[||  ]"));
+      display.print(F("[||  ]"));
     } else if (rssi > -85) {
-      display.print(F("WiFi:[|   ]"));
+      display.print(F("[|   ]"));
     } else {
-      display.print(F("WiFi:[    ]"));
+      display.print(F("[    ]"));
     }
     
-    // Show IP address
+    // Show IP address (last two octets)
     display.setCursor(70, 0);
-    display.print(WiFi.localIP()[3]); // Just show last octet to save space
+    display.print(WiFi.localIP()[2]);
+    display.print(".");
+    display.print(WiFi.localIP()[3]);
   } else {
     display.print(F("WiFi:[X]"));
   }

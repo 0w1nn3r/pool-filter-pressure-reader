@@ -27,6 +27,9 @@ private:
     Settings& settings;
     PressureLogger& pressureLogger;
 
+    // Helper function to draw arc segments for the gauge
+    String drawArcSegment(float cx, float cy, float radius, float startAngle, float endAngle, String color, float opacity);
+    
     void handleRoot();
     void handleAPI();
     void handleBackflushConfig();

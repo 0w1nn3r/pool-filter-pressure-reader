@@ -110,15 +110,24 @@ bool PressureLogger::saveReadings() {
 }
 
 void PressureLogger::addReading(float pressure) {
-    // Check if initialized
-    if (!initialized) {
+    // Check if initialized and time is properly initialized
+    if (!initialized || !timeManager.isTimeInitialized()) {
         return;
     }
     
+    // Get current time
+    time_t currentTime = timeManager.getCurrentTime();
+    
     // Only record if pressure has changed significantly or it's the first reading
     if (readings.empty() || abs(pressure - lastRecordedPressure) >= PRESSURE_CHANGE_THRESHOLD) {
+        // Ensure we have a valid timestamp (after Jan 1, 2021)
+        if (currentTime < 1609459200) { // Jan 1, 2021 timestamp
+            Serial.println("Invalid timestamp for pressure reading");
+            return;
+        }
+        
         PressureReading reading;
-        reading.timestamp = timeManager.getCurrentTime();
+        reading.timestamp = currentTime;
         reading.pressure = pressure;
         
         readings.push_back(reading);
@@ -130,8 +139,8 @@ void PressureLogger::addReading(float pressure) {
         }
         
         // Save immediately if this is the first reading or save interval has passed
-        unsigned long currentTime = millis();
-        if (readings.size() == 1 || currentTime - lastSaveTime >= saveInterval) {
+        unsigned long currentMillis = millis();
+        if (readings.size() == 1 || currentMillis - lastSaveTime >= saveInterval) {
             saveReadings();
         }
     }
@@ -152,8 +161,7 @@ void PressureLogger::addReadingWithTimestamp(const PressureReading& reading) {
         trimOldReadings(MAX_READINGS);
     }
     
-    // We don't save immediately here as the simulated data generation
-    // will call saveReadings() explicitly after adding all readings
+    // Save readings periodically in the update() function
 }
 
 void PressureLogger::update() {

@@ -41,79 +41,6 @@ const int LED_PIN = D4;   // Onboard LED (usually GPIO2/D4 on NodeMCU)
 
 // System components
 
-/*
-// Function to generate simulated pressure data
-void generateSimulatedData(PressureLogger& pressureLogger, TimeManager& timeManager) {
-  // Generate data points over a week (7 days)
-  // Starting at 1.0 bar and rising to 1.8 bar
-  float startPressure = 1.0;
-  float endPressure = 1.8;
-  
-  // Get current time as base
-  time_t currentTime = timeManager.getCurrentTime();
-  
-  // Make sure we have a valid time
-  if (currentTime < 1609459200) { // Jan 1, 2021 timestamp
-    Serial.println("Current time not valid for simulated data generation");
-    return;
-  }
-  
-  Serial.print("Current time for simulation base: ");
-  Serial.println(currentTime);
-  
-  // Generate data points for the past 7 days (one week)
-  // We'll create 4 points per day = 28 points total
-  int totalPoints = 0;
-  
-  // Start from 7 days ago
-  time_t weekAgoTime = currentTime - (7 * 24 * 60 * 60);
-  
-  // Create data points at 6-hour intervals
-  for (time_t t = weekAgoTime; t <= currentTime; t += 6 * 60 * 60) {
-    // Calculate how far we are through the week (0.0 to 1.0)
-    float progress = float(t - weekAgoTime) / float(currentTime - weekAgoTime);
-    
-    // Calculate pressure based on progress through the week
-    float pressure = startPressure + progress * (endPressure - startPressure);
-    
-    // Add some small random variation (+/- 0.05 bar)
-    pressure += (random(0, 100) - 50) / 1000.0;
-    
-    // Create a reading with explicit timestamp
-    PressureReading reading;
-    reading.timestamp = t;
-    reading.pressure = pressure;
-    
-    // Add the reading with explicit timestamp
-    pressureLogger.addReadingWithTimestamp(reading);
-    totalPoints++;
-    
-    // Debug output
-    Serial.print("Added simulated data point #");
-    Serial.print(totalPoints);
-    Serial.print(": ");
-    Serial.print(pressure);
-    Serial.print(" bar at time ");
-    Serial.print(t);
-    
-    // Convert timestamp to readable date/time
-    char timeStr[30];
-    struct tm* timeinfo = localtime(&t);
-    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
-    Serial.print(" (");
-    Serial.print(timeStr);
-    Serial.println(")");
-  }
-  
-  Serial.print("Simulated data generation complete with ");
-  Serial.print(totalPoints);
-  Serial.println(" data points");
-}
-*/
-
-// Forward declaration for the commented-out function
-// Uncomment the implementation above when testing without a real sensor
-void generateSimulatedData(PressureLogger& pressureLogger, TimeManager& timeManager);
 WebServer* webServer;
 Display* displayManager;
 TimeManager* timeManager;
@@ -207,33 +134,6 @@ void setup() {
   // Initialize pressure logger
   pressureLogger = new PressureLogger(*timeManager, *settings);
   pressureLogger->begin();
-  
-  /* 
-  // Generate simulated pressure data for testing
-  // Uncomment this section when testing without a real sensor
-  if (timeManager->isTimeInitialized()) {
-    Serial.println("Generating simulated pressure data...");
-    // Clear existing readings first
-    pressureLogger->clearReadings();
-    
-    // Wait a moment to ensure filesystem operations complete
-    delay(500);
-    
-    // Generate the simulated data
-    generateSimulatedData(*pressureLogger, *timeManager);
-    
-    // Force save to filesystem and wait for completion
-    Serial.println("Saving simulated data to filesystem...");
-    pressureLogger->saveReadings();
-    delay(1000);
-    
-    // Verify data was saved
-    Serial.print("Simulated data points saved: ");
-    Serial.println(pressureLogger->getReadingCount());
-  } else {
-    Serial.println("Time not initialized, skipping simulated data generation");
-  }
-  */
   
   // Initialize web server
   webServer = new WebServer(currentPressure, backflushThreshold, backflushDuration, 

@@ -7,6 +7,28 @@ extern "C" {
 // Pressure sensor calibration
 extern float PRESSURE_MAX;
 
+// Implementation of the drawArcSegment function
+String WebServer::drawArcSegment(float cx, float cy, float radius, float startAngle, float endAngle, String color, float opacity) {
+  // Calculate start and end points of the arc
+  float startX = cx + radius * cos(startAngle);
+  float startY = cy + radius * sin(startAngle);
+  float endX = cx + radius * cos(endAngle);
+  float endY = cy + radius * sin(endAngle);
+  
+  // Determine if the arc is larger than 180 degrees (π radians)
+  int largeArcFlag = (endAngle - startAngle > 3.14159) ? 1 : 0;
+  
+  // Create the SVG path for the arc
+  String path = "        <path d='M " + String(cx) + "," + String(cy) + " L " + 
+                String(startX) + "," + String(startY) + " A " + 
+                String(radius) + " " + String(radius) + " 0 " + 
+                String(largeArcFlag) + " 1 " + 
+                String(endX) + "," + String(endY) + " Z' " + 
+                "fill='" + color + "' fill-opacity='" + String(opacity) + "' />\n";
+  
+  return path;
+}
+
 WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration, 
                      bool& active, unsigned long& startTime, bool& configChanged,
                      TimeManager& tm, BackflushLogger& logger, Settings& settings,
@@ -60,10 +82,14 @@ void WebServer::handleRoot() {
   html += "    .container { max-width: 600px; margin: 0 auto; }\n";
   html += "    .pressure-display { font-size: 48px; margin: 20px 0; }\n";
   html += "    .info { font-size: 14px; color: #666; margin-top: 40px; }\n";
-  html += "    .gauge { width: 200px; height: 200px; margin: 20px auto; position: relative; }\n";
-  html += "    .gauge-body { width: 100%; height: 100%; border-radius: 50%; background-color: #eee; }\n";
-  html += "    .gauge-fill { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; clip: rect(0, 200px, 200px, 100px); }\n";
-  html += "    .gauge-cover { width: 70%; height: 70%; background-color: white; border-radius: 50%; position: absolute; top: 15%; left: 15%; display: flex; align-items: center; justify-content: center; font-size: 24px; }\n";
+  html += "    .gauge-container { width: 250px; height: 250px; margin: 20px auto; position: relative; }\n";
+  html += "    .gauge-bg { fill: #f0f0f0; }\n";
+  html += "    .gauge-dial { fill: none; stroke-width: 10; stroke-linecap: round; }\n";
+  html += "    .gauge-value-text { font-family: Arial; font-size: 24px; font-weight: bold; text-anchor: middle; }\n";
+  html += "    .gauge-label { font-family: Arial; font-size: 12px; text-anchor: middle; }\n";
+  html += "    .gauge-tick { stroke: #333; stroke-width: 1; }\n";
+  html += "    .gauge-tick-label { font-family: Arial; font-size: 10px; text-anchor: middle; }\n";
+  html += "    .gauge-pointer { stroke: #cc0000; stroke-width: 4; stroke-linecap: round; }\n";
   html += "    .backflush-config { margin: 30px 0; padding: 20px; background-color: #f5f5f5; border-radius: 10px; }\n";
   html += "    .backflush-config h2 { margin-top: 0; }\n";
   html += "    .form-group { margin-bottom: 15px; }\n";
@@ -79,22 +105,75 @@ void WebServer::handleRoot() {
   html += "    <h1>Pool Filter Pressure Monitor</h1>\n";
   html += "    <div class='pressure-display'>" + String(currentPressure, 1) + " bar</div>\n";
   
-  // Calculate gauge fill percentage and color
+  // Calculate gauge rotation angle based on pressure
   float percentage = (currentPressure / PRESSURE_MAX) * 100;
-  String gaugeColor = "#4CAF50"; // Green by default
   
-  if (percentage > 75) {
-    gaugeColor = "#F44336"; // Red for high pressure
-  } else if (percentage > 50) {
-    gaugeColor = "#FF9800"; // Orange for medium pressure
+  // Define the gauge sweep from 135 degrees (lower left) to 405 degrees (lower left + 270)
+  // This creates a 270-degree sweep clockwise
+  float startAngle = 135.0;
+  float endAngle = 405.0;
+  float angle = startAngle + (percentage / 100) * 270.0;
+  
+  // Calculate threshold percentages
+  float thresholdPercentage = (backflushThreshold / PRESSURE_MAX) * 100;
+  float thresholdPlusMarginPercentage = ((backflushThreshold + 0.2) / PRESSURE_MAX) * 100;
+  
+  // Calculate angles for the colored segments
+  float thresholdAngle = startAngle + (thresholdPercentage / 100) * 270.0;
+  float thresholdPlusMarginAngle = startAngle + (thresholdPlusMarginPercentage / 100) * 270.0;
+  
+  // Create SVG gauge
+  html += "    <div class='gauge-container'>\n";
+  html += "      <svg width='250' height='250' viewBox='0 0 250 250'>\n";
+  
+  // Background circle
+  html += "        <circle cx='125' cy='125' r='120' class='gauge-bg' />\n";
+  
+  // Draw the colored arcs
+  // Green segment (0 to threshold)
+  float greenStartAngle = startAngle * (3.14159 / 180);
+  float greenEndAngle = thresholdAngle * (3.14159 / 180);
+  html += drawArcSegment(125, 125, 105, greenStartAngle, greenEndAngle, "#4CAF50", 0.2);
+  
+  // Orange segment (threshold to threshold+0.2)
+  float orangeStartAngle = thresholdAngle * (3.14159 / 180);
+  float orangeEndAngle = thresholdPlusMarginAngle * (3.14159 / 180);
+  html += drawArcSegment(125, 125, 105, orangeStartAngle, orangeEndAngle, "#FF9800", 0.2);
+  
+  // Red segment (threshold+0.2 to max)
+  float redStartAngle = thresholdPlusMarginAngle * (3.14159 / 180);
+  float redEndAngle = endAngle * (3.14159 / 180);
+  html += drawArcSegment(125, 125, 105, redStartAngle, redEndAngle, "#F44336", 0.2);
+  
+  // Draw tick marks and labels
+  for (int i = 0; i <= 10; i++) {
+    float tickAngle = startAngle + (i * 27); // 270 degrees / 10 = 27 degrees per tick
+    float tickRadians = tickAngle * 3.14159 / 180;
+    
+    // Calculate tick positions
+    float innerX = 125 + 90 * cos(tickRadians);
+    float innerY = 125 + 90 * sin(tickRadians);
+    float outerX = 125 + 105 * cos(tickRadians);
+    float outerY = 125 + 105 * sin(tickRadians);
+    
+    // Draw tick line
+    html += "        <line x1='" + String(innerX) + "' y1='" + String(innerY) + "' x2='" + String(outerX) + "' y2='" + String(outerY) + "' class='gauge-tick' />\n";
+    
+    // Draw tick label
+    float labelX = 125 + 75 * cos(tickRadians);
+    float labelY = 125 + 75 * sin(tickRadians);
+    float tickValue = (i / 10.0) * PRESSURE_MAX;
+    html += "        <text x='" + String(labelX) + "' y='" + String(labelY) + "' class='gauge-tick-label'>" + String(tickValue, 1) + "</text>\n";
   }
   
-  float rotation = (percentage / 100) * 180;
+  // Draw the pointer
+  float pointerRadians = angle * 3.14159 / 180;
+  float pointerX = 125 + 90 * cos(pointerRadians);
+  float pointerY = 125 + 90 * sin(pointerRadians);
   
-  html += "    <div class='gauge'>\n";
-  html += "      <div class='gauge-body'></div>\n";
-  html += "      <div class='gauge-fill' style='transform: rotate(" + String(rotation) + "deg); background-color: " + gaugeColor + ";'></div>\n";
-  html += "      <div class='gauge-cover'>" + String(currentPressure, 1) + "</div>\n";
+  html += "        <line x1='125' y1='125' x2='" + String(pointerX) + "' y2='" + String(pointerY) + "' class='gauge-pointer' />\n";
+  html += "        <circle cx='125' cy='125' r='10' fill='#333' />\n"; // Pointer pivot
+  html += "      </svg>\n";
   html += "    </div>\n";
   html += "    <p>Last updated: " + String(millis() / 1000) + " seconds ago</p>\n";
   
@@ -167,11 +246,11 @@ void WebServer::handleRoot() {
   html += "    </script>\n";
   
   html += "    <p class='info'>This page auto-refreshes every 5 seconds</p>\n";
-  html += "    <p>API: <a href='/api'>/api</a> (JSON format) | <a href='/log'>Backflush Log</a></p>\n";
+  html += "    <p>API: <a href='/api'>/api</a> (JSON format)</p>\n";
   
   // Add current time if available
   if (timeManager.isTimeInitialized()) {
-    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + "</p>\n";
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT+1)</p>\n";
   }
   html += "  </div>\n";
   html += "</body>\n";
@@ -258,7 +337,7 @@ void WebServer::handleBackflushLog() {
   
   // Add current time if available
   if (timeManager.isTimeInitialized()) {
-    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + "</p>\n";
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT+1)</p>\n";
   }
   
   // Add event count
@@ -306,20 +385,28 @@ void WebServer::handlePressureHistory() {
     html += "tr:nth-child(even) { background-color: #f9f9f9; }\n";
     html += "#chart-container { width: 100%; height: 300px; margin: 20px 0; }\n";
     html += "</style>\n";
-    // Load a simple version of Chart.js
+    // Load Chart.js and required plugins for time scale and zooming
+    html += "<script src=\"https://cdn.jsdelivr.net/npm/moment@2.29.1/min/moment.min.js\"></script>\n";
     html += "<script src=\"https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js\"></script>\n";
+    html += "<script src=\"https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@0.1.2/dist/chartjs-adapter-moment.min.js\"></script>\n";
+    html += "<script src=\"https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js\"></script>\n";
+    html += "<script src=\"https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7/dist/chartjs-plugin-zoom.min.js\"></script>\n";
     html += "</head>\n";
     html += "<body>\n";
     html += "<h1>Pool Pressure History</h1>\n";
-    html += "<p>Current time: " + timeManager.getCurrentTimeStr() + "</p>\n";
+    html += "<p>Current time: " + timeManager.getCurrentTimeStr() + " (GMT+1)</p>\n";
     
     // Add navigation links
     html += "<p><a href=\"/\">Back to Dashboard</a> | ";
     html += "<a href=\"/log\">View Backflush Log</a> | ";
     html += "<a href=\"/clearpressure\" onclick=\"return confirm('Are you sure you want to clear all pressure history?');\">Clear Pressure History</a></p>\n";
     
-    // Add chart container
+    // Add chart container with reset zoom button
     html += "<h2>Pressure History Chart</h2>\n";
+    html += "<div style=\"margin-bottom: 10px;\">\n";
+    html += "  <button id=\"reset-zoom\" style=\"padding: 5px 10px; background-color: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer;\">Reset Zoom</button>\n";
+    html += "  <span style=\"margin-left: 10px; font-size: 0.9em; color: #666;\">Tip: Drag to zoom, double-click to reset</span>\n";
+    html += "</div>\n";
     html += "<div id=\"chart-container\">\n";
     html += "  <canvas id=\"pressure-chart\"></canvas>\n";
     html += "</div>\n";
@@ -327,9 +414,13 @@ void WebServer::handlePressureHistory() {
     // Get pressure data as JSON
     String jsonData = pressureLogger.getReadingsAsJson();
     
+    // Add current device time to JSON
+    jsonData.remove(jsonData.length() - 1); // Remove the closing brace
+    jsonData += ",\"currentTime\":" + String(timeManager.getCurrentTime()) + "}";
+    
     // Add JavaScript for chart
     html += "<script>\n";
-    html += "  // Parse the pressure data\n";
+    html += "  // Parse pressure data\n";
     html += "  var pressureData = " + jsonData + ";\n";
     
     html += "  // Check if we have data\n";
@@ -337,33 +428,43 @@ void WebServer::handlePressureHistory() {
     html += "    document.getElementById('chart-container').innerHTML = '<p>No pressure readings recorded yet.</p>';\n";
     html += "  } else {\n";
     html += "    // Prepare data for Chart.js\n";
-    html += "    var labels = [];\n";
-    html += "    var values = [];\n";
+    html += "    var chartData = [];\n";
     
     html += "    // Sort data by timestamp\n";
     html += "    pressureData.readings.sort(function(a, b) { return a.time - b.time; });\n";
     
-    html += "    // Process each reading\n";
+    html += "    // Use device time for filtering\n";
+    html += "    var deviceTime = pressureData.currentTime;\n";
+    html += "    // Process each reading, filtering out future timestamps\n";
     html += "    for (var i = 0; i < pressureData.readings.length; i++) {\n";
     html += "      var reading = pressureData.readings[i];\n";
-    html += "      var date = new Date(reading.time * 1000);\n";
-    html += "      labels.push(date.toLocaleDateString() + ' ' + date.toLocaleTimeString());\n";
-    html += "      values.push(reading.pressure);\n";
+    html += "      // Skip readings with future timestamps\n";
+    html += "      if (reading.time > deviceTime) {\n";
+    html += "        console.log('Skipping future timestamp: ' + new Date(reading.time * 1000));\n";
+    html += "        continue;\n";
+    html += "      }\n";
+    html += "      // Convert UTC timestamp to local time by subtracting 1 hour\n";
+    html += "      // This is needed because device is GMT+1 but browser is GMT+2\n";
+    html += "      var localTime = new Date((reading.time - 3600) * 1000);\n";
+    html += "      chartData.push({\n";
+    html += "        x: localTime,\n";
+    html += "        y: reading.pressure\n";
+    html += "      });\n";
     html += "    }\n";
     
     html += "    // Create the chart\n";
     html += "    var ctx = document.getElementById('pressure-chart').getContext('2d');\n";
-    html += "    var chart = new Chart(ctx, {\n";
+    html += "    var chart; // Define chart variable in wider scope for reset button access\n";
+    html += "    chart = new Chart(ctx, {\n";
     html += "      type: 'line',\n";
     html += "      data: {\n";
-    html += "        labels: labels,\n";
     html += "        datasets: [{\n";
     html += "          label: 'Pressure (bar)',\n";
-    html += "          data: values,\n";
+    html += "          data: chartData,\n";
     html += "          backgroundColor: 'rgba(75, 192, 192, 0.2)',\n";
-    html += "          borderColor: 'rgba(75, 192, 192, 1)',\n";
-    html += "          borderWidth: 2,\n";
-    html += "          pointRadius: 3\n";
+    html += "          borderColor: 'rgb(75, 192, 192)',\n";
+    html += "          tension: 0,\n";
+    html += "          fill: false\n";
     html += "        }]\n";
     html += "      },\n";
     html += "      options: {\n";
@@ -371,9 +472,17 @@ void WebServer::handlePressureHistory() {
     html += "        maintainAspectRatio: false,\n";
     html += "        scales: {\n";
     html += "          xAxes: [{\n";
+    html += "            type: 'time',\n";
+    html += "            time: {\n";
+    html += "              displayFormats: {\n";
+    html += "                hour: 'MMM D, HH:mm'\n";
+    html += "              },\n";
+    html += "              timezone: 'Europe/Paris'\n";
+    html += "            },\n";
     html += "            ticks: {\n";
     html += "              maxRotation: 45,\n";
     html += "              minRotation: 45,\n";
+    html += "              autoSkip: true,\n";
     html += "              maxTicksLimit: 10\n";
     html += "            }\n";
     html += "          }],\n";
@@ -382,8 +491,31 @@ void WebServer::handlePressureHistory() {
     html += "              beginAtZero: false\n";
     html += "            }\n";
     html += "          }]\n";
+    html += "        },\n";
+    html += "        plugins: {\n";
+    html += "          zoom: {\n";
+    html += "            pan: {\n";
+    html += "              enabled: false\n";
+    html += "            },\n";
+    html += "            zoom: {\n";
+    html += "              enabled: true,\n";
+    html += "              mode: 'xy',\n";
+    html += "              drag: true,\n";
+    html += "              speed: 0.1,\n";
+    html += "              threshold: 2,\n";
+    html += "              sensitivity: 3\n";
+    html += "            }\n";
+    html += "          }\n";
     html += "        }\n";
     html += "      }\n";
+    html += "    });\n";
+    html += "    // Add reset zoom button functionality\n";
+    html += "    document.getElementById('reset-zoom').addEventListener('click', function() {\n";
+    html += "      chart.resetZoom();\n";
+    html += "    });\n";
+    html += "    // Also reset zoom on double-click\n";
+    html += "    document.getElementById('pressure-chart').addEventListener('dblclick', function() {\n";
+    html += "      chart.resetZoom();\n";
     html += "    });\n";
     html += "  }\n";
     html += "</script>\n";
@@ -392,9 +524,19 @@ void WebServer::handlePressureHistory() {
     html += "<script>\n";
     html += "  // Display summary information if we have data\n";
     html += "  if (pressureData && pressureData.readings && pressureData.readings.length > 0) {\n";
-    html += "    document.write('<p><strong>Total readings:</strong> ' + pressureData.readings.length + '</p>');\n";
-    html += "    var firstDate = new Date(pressureData.readings[0].time * 1000);\n";
-    html += "    var lastDate = new Date(pressureData.readings[pressureData.readings.length-1].time * 1000);\n";
+    html += "    // Filter out future timestamps for display\n";
+    html += "    var currentTime = Math.floor(Date.now() / 1000);\n";
+    html += "    var validReadings = pressureData.readings.filter(function(reading) {\n";
+    html += "      return reading.time <= currentTime;\n";
+    html += "    });\n";
+    html += "    document.write('<p><strong>Total readings:</strong> ' + validReadings.length + ' (valid) / ' + pressureData.readings.length + ' (total)</p>');\n";
+    html += "    if (validReadings.length > 0) {\n";
+    html += "      var firstDate = new Date(validReadings[0].time * 1000);\n";
+    html += "      var lastDate = new Date(validReadings[validReadings.length-1].time * 1000);\n";
+    html += "    } else {\n";
+    html += "      document.write('<p><strong>Warning:</strong> No valid readings with timestamps in the past or present</p>');\n";
+    html += "      return;\n";
+    html += "    }\n";
     html += "    document.write('<p><strong>Date range:</strong> ' + firstDate.toLocaleString() + ' to ' + lastDate.toLocaleString() + '</p>');\n";
     html += "  }\n";
     html += "</script>\n";
@@ -589,7 +731,7 @@ void WebServer::handleSettings() {
   
   // Add current time if available
   if (timeManager.isTimeInitialized()) {
-    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + "</p>\n";
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT+1)</p>\n";
   }
   
   // Sensor configuration form
