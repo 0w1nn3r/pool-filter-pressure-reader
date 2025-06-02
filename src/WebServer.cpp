@@ -250,7 +250,8 @@ void WebServer::handleRoot() {
   
   // Add current time if available
   if (timeManager.isTimeInitialized()) {
-    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT+1)</p>\n";
+    int offsetHours = timeManager.getTimezoneOffset() / 3600;
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT" + (offsetHours >= 0 ? "+" : "") + String(offsetHours) + ")</p>\n";
   }
   html += "  </div>\n";
   html += "</body>\n";
@@ -337,7 +338,8 @@ void WebServer::handleBackflushLog() {
   
   // Add current time if available
   if (timeManager.isTimeInitialized()) {
-    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT+1)</p>\n";
+    int offsetHours = timeManager.getTimezoneOffset() / 3600;
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT" + (offsetHours >= 0 ? "+" : "") + String(offsetHours) + ")</p>\n";
   }
   
   // Add event count
@@ -394,7 +396,8 @@ void WebServer::handlePressureHistory() {
     html += "</head>\n";
     html += "<body>\n";
     html += "<h1>Pool Pressure History</h1>\n";
-    html += "<p>Current time: " + timeManager.getCurrentTimeStr() + " (GMT+1)</p>\n";
+    int offsetHours = timeManager.getTimezoneOffset() / 3600;
+    html += "<p>Current time: " + timeManager.getCurrentTimeStr() + " (GMT" + (offsetHours >= 0 ? "+" : "") + String(offsetHours) + ")</p>\n";
     
     // Add navigation links
     html += "<p><a href=\"/\">Back to Dashboard</a> | ";
@@ -443,9 +446,8 @@ void WebServer::handlePressureHistory() {
     html += "        console.log('Skipping future timestamp: ' + new Date(reading.time * 1000));\n";
     html += "        continue;\n";
     html += "      }\n";
-    html += "      // Convert UTC timestamp to local time by subtracting 1 hour\n";
-    html += "      // This is needed because device is GMT+1 but browser is GMT+2\n";
-    html += "      var localTime = new Date((reading.time - 3600) * 1000);\n";
+    html += "      // Convert UTC timestamp to local time using detected timezone\n";
+    html += "      var localTime = new Date(reading.time * 1000);\n";
     html += "      chartData.push({\n";
     html += "        x: localTime,\n";
     html += "        y: reading.pressure\n";
@@ -525,12 +527,13 @@ void WebServer::handlePressureHistory() {
     html += "  // Display summary information if we have data\n";
     html += "  if (pressureData && pressureData.readings && pressureData.readings.length > 0) {\n";
     html += "    // Filter out future timestamps for display\n";
-    html += "    var currentTime = Math.floor(Date.now() / 1000);\n";
+    html += "    var currentGMTTime = Math.floor(Date.now() / 1000);\n";
     html += "    var validReadings = pressureData.readings.filter(function(reading) {\n";
-    html += "      return reading.time <= currentTime;\n";
+    html += "      return reading.time <= currentGMTTime;\n";
     html += "    });\n";
     html += "    document.write('<p><strong>Total readings:</strong> ' + validReadings.length + ' (valid) / ' + pressureData.readings.length + ' (total)</p>');\n";
     html += "    if (validReadings.length > 0) {\n";
+    html += "      // Convert GMT timestamps to local time\n";
     html += "      var firstDate = new Date(validReadings[0].time * 1000);\n";
     html += "      var lastDate = new Date(validReadings[validReadings.length-1].time * 1000);\n";
     html += "    } else {\n";
@@ -731,7 +734,8 @@ void WebServer::handleSettings() {
   
   // Add current time if available
   if (timeManager.isTimeInitialized()) {
-    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT+1)</p>\n";
+    int offsetHours = timeManager.getTimezoneOffset() / 3600;
+    html += "    <p>Current time: " + timeManager.getFormattedDateTime() + " (GMT" + (offsetHours >= 0 ? "+" : "") + String(offsetHours) + ")</p>\n";
   }
   
   // Sensor configuration form

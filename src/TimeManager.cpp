@@ -1,7 +1,7 @@
 #include "TimeManager.h"
 
 TimeManager::TimeManager() : timeInitialized(false), lastSyncTime(0) {
-    ntpClient = new NTPClient(ntpUDP, "pool.ntp.org", 3600); // GMT+1 (3600 seconds offset)
+    ntpClient = new NTPClient(ntpUDP, "pool.ntp.org", 0); // Start with UTC, we'll adjust for timezone later
 }
 
 TimeManager::~TimeManager() {
@@ -10,8 +10,121 @@ TimeManager::~TimeManager() {
     }
 }
 
+String TimeManager::getPublicIP() {
+    if (WiFi.status() != WL_CONNECTED) {
+        return "";
+    }
+
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, "http://api.ipify.org");
+    int httpCode = http.GET();
+
+    if (httpCode == HTTP_CODE_OK) {
+        String ip = http.getString();
+        http.end();
+        return ip;
+    }
+
+    http.end();
+    return "";
+}
+
+bool TimeManager::detectTimezone(const String& ip) {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("No WiFi connection");
+        return false;
+    }
+
+    // Wait a bit after WiFi connection before making the request
+    delay(1000);
+
+    const int maxRetries = 3;
+    for (int retry = 0; retry < maxRetries; retry++) {
+        if (retry > 0) {
+            // Wait longer between retries
+            delay(2000);
+        }
+
+        WiFiClient client;
+        HTTPClient http;
+        String url = "http://worldtimeapi.org/api/ip";
+        http.begin(client, url);
+        int httpCode = http.GET();
+
+        Serial.print("WorldTimeAPI response code (attempt ");
+        Serial.print(retry + 1);
+        Serial.print("/");
+        Serial.print(maxRetries);
+        Serial.print("): ");
+        Serial.println(httpCode);
+
+        if (httpCode == HTTP_CODE_OK) {
+            String payload = http.getString();
+            Serial.print("WorldTimeAPI response: ");
+            Serial.println(payload);
+
+            StaticJsonDocument<512> doc;
+            DeserializationError error = deserializeJson(doc, payload);
+
+            http.end();
+
+            if (error) {
+                Serial.print("JSON parse error: ");
+                Serial.println(error.c_str());
+                continue;
+            }
+
+            String timezone = doc["timezone"].as<const char*>();
+            timezoneOffset = doc["raw_offset"].as<int32_t>();
+            
+            // Add DST offset if active
+            if (doc["dst"].as<bool>()) {
+                timezoneOffset += doc["dst_offset"].as<int32_t>();
+            }
+            
+            timezoneInitialized = true;
+            
+            // Keep NTP client in GMT/UTC
+            ntpClient->setTimeOffset(0);
+            
+            Serial.print("Timezone detected: ");
+            Serial.print(timezone);
+            Serial.print(" (offset: ");
+            Serial.print(timezoneOffset);
+            Serial.print(" seconds, DST: ");
+            Serial.print(doc["dst"].as<bool>() ? "yes" : "no");
+            Serial.println(")");
+            
+            return true;
+        }
+
+        http.end();
+
+        if (retry < maxRetries - 1) {
+            Serial.println("Retrying...");
+        }
+    }
+
+    Serial.println("All retries failed");
+    return false;
+}
+
 void TimeManager::begin() {
     ntpClient->begin();
+    
+    // Try to detect timezone
+    String ip = getPublicIP();
+    if (ip.length() > 0) {
+        if (detectTimezone(ip)) {
+            Serial.println("Timezone detection successful");
+        } else {
+            Serial.println("Timezone detection failed, using UTC");
+        }
+    } else {
+        Serial.println("Could not get public IP, using UTC");
+    }
+    
     update(); // Initial time sync
 }
 
@@ -37,8 +150,39 @@ void TimeManager::update() {
     }
 }
 
+time_t TimeManager::getCurrentGMTTime() const {
+    return ntpClient->getEpochTime();
+}
+
+String TimeManager::formatGMTTime(time_t t) const {
+    char timeStr[9];
+    struct tm* timeinfo = gmtime(&t);
+    strftime(timeStr, sizeof(timeStr), "%H:%M:%S", timeinfo);
+    return String(timeStr);
+}
+
+String TimeManager::formatGMTDate(time_t t) const {
+    char dateStr[11];
+    struct tm* timeinfo = gmtime(&t);
+    strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", timeinfo);
+    return String(dateStr);
+}
+
+String TimeManager::getFormattedGMTDateTime() const {
+    time_t t = getCurrentGMTTime();
+    return formatGMTDate(t) + " " + formatGMTTime(t);
+}
+
+time_t TimeManager::gmtToLocal(time_t gmtTime) const {
+    return gmtTime + timezoneOffset;
+}
+
+time_t TimeManager::localToGMT(time_t localTime) const {
+    return localTime - timezoneOffset;
+}
+
 time_t TimeManager::getCurrentTime() const {
-    return now();
+    return gmtToLocal(getCurrentGMTTime());
 }
 
 String TimeManager::getCurrentTimeStr() const {
@@ -53,17 +197,17 @@ String TimeManager::formatTime(time_t t) const {
 }
 
 String TimeManager::formatDate(time_t t) const {
-    char buffer[11]; // YYYY-MM-DD + null terminator
+    char buffer[16]; // YYYY-MM-DD + null terminator with extra space
     struct tm* timeinfo = localtime(&t);
-    sprintf(buffer, "%04d-%02d-%02d", timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday);
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d", timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday);
     return String(buffer);
 }
 
 String TimeManager::getFormattedDateTime() const {
-    char buffer[20]; // YYYY-MM-DD HH:MM:SS + null terminator
+    char buffer[32]; // YYYY-MM-DD HH:MM:SS + null terminator with extra space
     time_t t = getCurrentTime();
     struct tm* timeinfo = localtime(&t);
-    sprintf(buffer, "%04d-%02d-%02d %02d:%02d:%02d", 
+    snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d", 
             timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday,
             timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
     return String(buffer);
