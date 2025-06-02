@@ -130,7 +130,7 @@ void WebServer::handleRoot() {
   html += "      <form id='backflushForm'>\n";
   html += "        <div class='form-group'>\n";
   html += "          <label for='threshold'>Threshold (bar):</label>\n";
-  html += "          <input type='number' id='threshold' name='threshold' min='0.5' max='" + String(PRESSURE_MAX) + "' step='0.1' value='" + String(backflushThreshold, 1) + "'>\n";
+  html += "          <input type='number' id='threshold' name='threshold' min='0.3' max='" + String(PRESSURE_MAX) + "' step='0.1' value='" + String(backflushThreshold, 1) + "'>\n";
   html += "        </div>\n";
   html += "        <div class='form-group'>\n";
   html += "          <label for='duration'>Duration (sec):</label>\n";
@@ -213,8 +213,8 @@ void WebServer::handleBackflushConfig() {
     unsigned int newDuration = server.arg("duration").toInt();
     
     // Validate values
-    if (newThreshold >= 0.5 && newThreshold <= PRESSURE_MAX && 
-        newDuration >= 5 && newDuration <= 300) {
+    if (newThreshold >= 0.3 && newThreshold <= PRESSURE_MAX && 
+        newDuration >= 3 && newDuration <= 300) {
       backflushThreshold = newThreshold;
       backflushDuration = newDuration;
       
@@ -402,13 +402,38 @@ void WebServer::handlePressureHistory() {
     // Add data retention configuration form
     html += "<div style=\"margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;\">\n";
     html += "  <h3>Data Retention Settings</h3>\n";
-    html += "  <form action=\"/setretention\" method=\"post\">\n";
+    html += "  <form id=\"retentionForm\">\n";
     html += "    <label for=\"retentionDays\">Keep pressure data for: </label>\n";
     html += "    <input type=\"number\" id=\"retentionDays\" name=\"retentionDays\" min=\"1\" max=\"90\" value=\"" + String(settings.getDataRetentionDays()) + "\" style=\"width: 60px;\"> days\n";
-    html += "    <button type=\"submit\" style=\"margin-left: 10px;\">Save</button>\n";
+    html += "    <button type=\"button\" onclick=\"saveRetentionSettings()\" style=\"margin-left: 10px;\">Save</button>\n";
     html += "    <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>\n";
+    html += "    <p id=\"retentionStatus\" style=\"font-weight: bold;\"></p>\n";
     html += "  </form>\n";
     html += "</div>\n";
+    
+    // Add JavaScript for retention form submission
+    html += "<script>\n";
+    html += "  function saveRetentionSettings() {\n";
+    html += "    const retentionDays = document.getElementById('retentionDays').value;\n";
+    html += "    const status = document.getElementById('retentionStatus');\n";
+    html += "    \n";
+    html += "    fetch('/setretention', {\n";
+    html += "      method: 'POST',\n";
+    html += "      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+    html += "      body: 'retentionDays=' + retentionDays\n";
+    html += "    })\n";
+    html += "    .then(response => response.json())\n";
+    html += "    .then(data => {\n";
+    html += "      status.textContent = data.message;\n";
+    html += "      status.style.color = data.success ? 'green' : 'red';\n";
+    html += "      setTimeout(() => { status.textContent = ''; }, 3000);\n";
+    html += "    })\n";
+    html += "    .catch(error => {\n";
+    html += "      status.textContent = 'Error: ' + error;\n";
+    html += "      status.style.color = 'red';\n";
+    html += "    });\n";
+    html += "  }\n";
+    html += "</script>\n";
     
     html += "</body>\n";
     html += "</html>\n";
@@ -495,10 +520,12 @@ void WebServer::handleManualBackflush() {
     backflushActive = true;
     backflushStartTime = millis();
     
-    // Log the manual backflush event
+    // Log the manual backflush event with the current pressure
     backflushLogger.logEvent(currentPressure, backflushDuration, "Manual");
     
-    Serial.println("Manual backflush started");
+    Serial.print("Manual backflush started at pressure: ");
+    Serial.print(currentPressure, 1);
+    Serial.println(" bar");
     
     // Redirect back to the main page
     server.sendHeader("Location", "/");
@@ -614,43 +641,65 @@ void WebServer::handleSettings() {
   server.send(200, "text/html", html);
 }
 void WebServer::handleSensorConfig() {
+    bool success = false;
+    String message = "Failed to update sensor settings";
+    
     if (server.hasArg("sensormax")) {
         String sensorMaxStr = server.arg("sensormax");
         float sensorMax = sensorMaxStr.toFloat();
         
-        // Update the setting
-        settings.setSensorMaxPressure(sensorMax);
-        
-        // Update the global variable
-        PRESSURE_MAX = sensorMax;
-        
-        Serial.print("Sensor max pressure updated to: ");
-        Serial.println(sensorMax);
+        // Validate input
+        if (sensorMax >= 1.0 && sensorMax <= 10.0) {
+            // Update the setting
+            settings.setSensorMaxPressure(sensorMax);
+            
+            // Update the global variable
+            PRESSURE_MAX = sensorMax;
+            
+            success = true;
+            message = "Sensor max pressure updated to: " + String(sensorMax, 1) + " bar";
+            
+            Serial.print("Sensor max pressure updated to: ");
+            Serial.println(sensorMax);
+        } else {
+            message = "Invalid sensor max pressure value. Must be between 1.0 and 10.0 bar.";
+        }
     }
     
-    // Redirect back to settings page
-    server.sendHeader("Location", "/settings");
-    server.send(303);
+    // Return JSON response instead of redirecting
+    String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
+    server.send(200, "application/json", jsonResponse);
 }
 
 void WebServer::handleSetRetention() {
+    bool success = false;
+    String message = "Failed to update retention settings";
+    
     if (server.hasArg("retentionDays")) {
         String retentionDaysStr = server.arg("retentionDays");
         unsigned int retentionDays = retentionDaysStr.toInt();
         
-        // Update the setting
-        settings.setDataRetentionDays(retentionDays);
-        
-        // Immediately prune old data based on new retention period
-        pressureLogger.pruneOldData();
-        pressureLogger.saveReadings();
-        
-        Serial.print("Data retention period updated to: ");
-        Serial.print(retentionDays);
-        Serial.println(" days");
+        // Validate input
+        if (retentionDays >= 1 && retentionDays <= 90) {
+            // Update the setting
+            settings.setDataRetentionDays(retentionDays);
+            
+            // Immediately prune old data based on new retention period
+            pressureLogger.pruneOldData();
+            pressureLogger.saveReadings();
+            
+            success = true;
+            message = "Data retention period updated to: " + String(retentionDays) + " days";
+            
+            Serial.print("Data retention period updated to: ");
+            Serial.print(retentionDays);
+            Serial.println(" days");
+        } else {
+            message = "Invalid retention period. Must be between 1 and 90 days.";
+        }
     }
     
-    // Redirect back to pressure history page
-    server.sendHeader("Location", "/pressure");
-    server.send(303);
+    // Return JSON response instead of redirecting
+    String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
+    server.send(200, "application/json", jsonResponse);
 }

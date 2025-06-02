@@ -131,6 +131,7 @@ float backflushThreshold = 2.0;  // Default threshold in bar
 unsigned int backflushDuration = 30;  // Default duration in seconds
 bool backflushActive = false;
 unsigned long backflushStartTime = 0;
+float backflushTriggerPressure = 0.0;  // Store the pressure that triggered the backflush
 bool backflushConfigChanged = false;
 
 // Function prototypes
@@ -350,9 +351,12 @@ void handleBackflush() {
     // Start backflush
     backflushActive = true;
     backflushStartTime = millis();
+    backflushTriggerPressure = currentPressure; // Store the pressure that triggered the backflush
     digitalWrite(RELAY_PIN, HIGH);  // Activate relay
     digitalWrite(LED_PIN, LOW);    // Turn LED ON (inverse logic on NodeMCU)
-    Serial.println("Backflush started");
+    Serial.print("Backflush started at pressure: ");
+    Serial.print(backflushTriggerPressure, 1);
+    Serial.println(" bar");
   }
   
   // Check if backflush should be stopped
@@ -365,10 +369,12 @@ void handleBackflush() {
       digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
       Serial.println("Backflush completed");
       
-      // Log the backflush event
+      // Log the backflush event with the original trigger pressure
       if (timeManager->isTimeInitialized()) {
-        backflushLogger->logEvent(currentPressure, backflushDuration);
-        Serial.println("Backflush event logged");
+        backflushLogger->logEvent(backflushTriggerPressure, backflushDuration);
+        Serial.print("Backflush event logged with trigger pressure: ");
+        Serial.print(backflushTriggerPressure, 1);
+        Serial.println(" bar");
       } else {
         Serial.println("Backflush event not logged - time not initialized");
       }

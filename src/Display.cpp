@@ -99,7 +99,7 @@ void Display::updateDisplay() {
   if (WiFi.status() == WL_CONNECTED) {
     int rssi = WiFi.RSSI();
     // Draw WiFi signal bars
-    if (rssi > -50) {
+    if (rssi > -55) {
       display.print(F("WiFi:[||||]"));
     } else if (rssi > -65) {
       display.print(F("WiFi:[||| ]"));
