@@ -65,16 +65,26 @@ void Display::showTimezone() {
   if (!displayAvailable || !timeManager) return;
   
   // Continue from current cursor position
-  if (timeManager->isTimezoneInitialized()) {
-    int32_t offset = timeManager->getTimezoneOffset();
-    int offsetHours = offset / 3600;
-    display.print(F("Timezone: GMT"));
-    if (offsetHours >= 0) display.print(F("+"));
-    display.println(offsetHours);
+  if (timeManager->isTimeInitialized()) {
+    // Show current date and time
+    display.println(timeManager->formatDate(timeManager->getCurrentTime()));
+    display.println(timeManager->formatTime(timeManager->getCurrentTime()));
+    
+    // Show timezone
+    if (timeManager->isTimezoneInitialized()) {
+      int32_t offset = timeManager->getTimezoneOffset();
+      int offsetHours = offset / 3600;
+      display.print(F("Timezone: GMT"));
+      if (offsetHours >= 0) display.print(F("+"));
+      display.println(offsetHours);
+    } else {
+      display.println(F("Timezone: UTC"));
+    }
   } else {
-    display.println(F("Timezone: UTC"));
+    display.println(F("Time not synced"));
   }
   display.display();
+  // allow time to read it
   delay(2000);
 }
 

@@ -48,11 +48,11 @@ bool TimeManager::detectTimezone(const String& ip) {
 
         WiFiClient client;
         HTTPClient http;
-        String url = "http://worldtimeapi.org/api/ip";
+        String url = "http://ip-api.com/json/?fields=timezone,offset,status,message";
         http.begin(client, url);
         int httpCode = http.GET();
 
-        Serial.print("WorldTimeAPI response code (attempt ");
+        Serial.print("IP-API response code (attempt ");
         Serial.print(retry + 1);
         Serial.print("/");
         Serial.print(maxRetries);
@@ -61,10 +61,10 @@ bool TimeManager::detectTimezone(const String& ip) {
 
         if (httpCode == HTTP_CODE_OK) {
             String payload = http.getString();
-            Serial.print("WorldTimeAPI response: ");
+            Serial.print("IP-API response: ");
             Serial.println(payload);
 
-            StaticJsonDocument<512> doc;
+            StaticJsonDocument<256> doc;
             DeserializationError error = deserializeJson(doc, payload);
 
             http.end();
@@ -75,38 +75,33 @@ bool TimeManager::detectTimezone(const String& ip) {
                 continue;
             }
 
-            String timezone = doc["timezone"].as<const char*>();
-            timezoneOffset = doc["raw_offset"].as<int32_t>();
-            
-            // Add DST offset if active
-            if (doc["dst"].as<bool>()) {
-                timezoneOffset += doc["dst_offset"].as<int32_t>();
+            // Check if the request was successful
+            const char* status = doc["status"].as<const char*>();
+            if (strcmp(status, "success") != 0) {
+                Serial.print("API error: ");
+                Serial.println(doc["message"].as<const char*>());
+                continue;
             }
-            
+
+            // Get timezone offset in seconds
+            timezoneOffset = doc["offset"].as<int32_t>();
             timezoneInitialized = true;
             
             // Keep NTP client in GMT/UTC
             ntpClient->setTimeOffset(0);
             
-            Serial.print("Timezone detected: ");
-            Serial.print(timezone);
-            Serial.print(" (offset: ");
+            Serial.print("Timezone detected with offset: ");
             Serial.print(timezoneOffset);
-            Serial.print(" seconds, DST: ");
-            Serial.print(doc["dst"].as<bool>() ? "yes" : "no");
-            Serial.println(")");
+            Serial.println(" seconds");
             
             return true;
         }
-
+        
         http.end();
-
-        if (retry < maxRetries - 1) {
-            Serial.println("Retrying...");
-        }
+        Serial.println("Request failed, retrying...");
     }
-
-    Serial.println("All retries failed");
+    
+    Serial.println("Failed to detect timezone after all retries");
     return false;
 }
 
