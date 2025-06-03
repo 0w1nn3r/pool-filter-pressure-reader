@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266mDNS.h>
+#include <ArduinoOTA.h>
 #include "TimeManager.h"
 #include "BackflushLogger.h"
 #include "Settings.h"
@@ -44,6 +46,8 @@ private:
     void handleSensorConfig();
     void handleSetRetention();
     void handlePressureCsv();
+    void handleOTAUpdate();
+    void setupOTA();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 

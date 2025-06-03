@@ -149,20 +149,72 @@ The top row shows WiFi signal strength and the last two octets of the IP address
 
 - `/` - Main web interface with pressure gauge and backflush configuration
 - `/api` - JSON API with current status and settings
+- `/backflush` - Configure backflush settings
 - `/log` - Backflush event log page with timestamp and pressure data
 - `/clearlog` - Clear the backflush event log (redirects to log page)
 - `/pressure` - Pressure history page with interactive graph
 - `/clearpressure` - Clear the pressure history data (redirects to pressure page)
 - `/wifireset` - WiFi settings page with option to reset WiFi configuration
 - `/manualbackflush` - POST endpoint to trigger a manual backflush operation
-- `/backflush` - POST endpoint to configure backflush settings
+- `/stopbackflush` - POST endpoint to stop an active backflush
+- `/settings` - Device settings page for sensor configuration and software updates
+- `/ota` - POST endpoint to enable OTA updates
+- `/sensorconfig` - POST endpoint to update pressure sensor configuration
+- `/setretention` - POST endpoint to configure data retention settings
+- `/pressure.csv` - Download pressure history data in CSV format
+
+## Over-The-Air Updates
+
+The device supports Over-The-Air (OTA) firmware updates, allowing you to update the firmware without physically connecting to the device. Here's how to perform an update:
+
+### For End Users
+
+1. Download the latest firmware file (`.bin`) from the project releases page
+2. Connect your computer to the same WiFi network as your pool filter device
+3. Open the pool filter web interface in your browser (usually at http://pool-filter.local)
+4. Go to the Settings page
+5. Click the "Enable OTA Updates" button
+6. Use one of these methods to upload the firmware within 5 minutes:
+
+   #### Using ESP8266 Flasher Tool (Windows)
+   - Download [ESP8266 Flasher](https://github.com/nodemcu/nodemcu-flasher)
+   - Run the application
+   - Select the downloaded firmware file
+   - Set the address to `pool-filter.local`
+   - Click Flash
+
+   #### Using espota.py (Advanced Users)
+   ```bash
+   python3 espota.py -i pool-filter.local -p 8266 -f firmware.bin
+   ```
+
+### For Developers
+
+If you're building from source:
+
+1. Set up PlatformIO
+2. Configure `platformio.ini` with:
+   ```ini
+   upload_protocol = espota
+   upload_port = pool-filter.local
+   ```
+3. Enable OTA updates in the web interface
+4. Run `pio run -t upload`
+
+For security, the OTA update window is limited to 5 minutes. After this time, OTA updates will be disabled until re-enabled through the web interface.
+
+### Troubleshooting
+
+- Make sure your computer and the device are on the same WiFi network
+- If `pool-filter.local` doesn't work, use the device's IP address (shown in the Settings page)
+- If the update fails, try power cycling the device and starting over
+- The LED will blink during the update - don't power off the device during this time
 
 ## Future Improvements
 
 - Control of circulation pump
 - Implement alerts for high/low pressure conditions
 - Support for multiple pressure sensors
-- Add OTA (Over-the-Air) update capability
 - Implement MQTT support for IoT integration
 - Email or push notifications for backflush events
 - Mobile app integration

@@ -46,7 +46,38 @@ WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration,
       pressureLogger(pressureLog) {
 }
 
+void WebServer::setupOTA() {
+    // Configure OTA
+    ArduinoOTA.setHostname(HOSTNAME);
+    
+    ArduinoOTA.onStart([]() {
+        String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
+        Serial.println("Start updating " + type);
+    });
+    
+    ArduinoOTA.onEnd([]() {
+        Serial.println("\nEnd");
+    });
+    
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    });
+    
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+    
+    ArduinoOTA.begin();
+}
+
 void WebServer::begin() {
+    setupOTA();
+    
     // Setup web server routes
     server.on("/", [this]() { handleRoot(); });
     server.on("/api", [this]() { handleAPI(); });
@@ -59,6 +90,7 @@ void WebServer::begin() {
     server.on("/manualbackflush", HTTP_POST, std::bind(&WebServer::handleManualBackflush, this));
     server.on("/stopbackflush", HTTP_POST, std::bind(&WebServer::handleStopBackflush, this));
     server.on("/settings", [this]() { handleSettings(); });
+    server.on("/ota", HTTP_POST, [this]() { handleOTAUpdate(); });
     server.on("/sensorconfig", HTTP_POST, std::bind(&WebServer::handleSensorConfig, this));
     server.on("/setretention", HTTP_POST, std::bind(&WebServer::handleSetRetention, this));
     server.on("/pressure.csv", [this]() { handlePressureCsv(); });
@@ -69,6 +101,12 @@ void WebServer::begin() {
 
 void WebServer::handleClient() {
     server.handleClient();
+    ArduinoOTA.handle();
+}
+
+void WebServer::handleOTAUpdate() {
+    ArduinoOTA.setPassword(NULL);
+    server.send(200, "text/plain", "OTA updates enabled for 5 minutes. Please upload firmware now.");
 }
 
 void WebServer::handleRoot() {
@@ -199,7 +237,7 @@ void WebServer::handleRoot() {
   html += "      <p>\n";
   html += "        <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>\n";
   html += "        <a href='/pressure' style='margin-right: 15px;'>View Pressure History</a>\n";
-  html += "        <a href='/settings' style='margin-right: 15px;'>Sensor Settings</a>\n";
+  html += "        <a href='/settings' style='margin-right: 15px;'>Settings</a>\n";
   html += "        <a href='/wifireset'>WiFi Settings</a>\n";
   html += "      </p>\n";
   html += "    </div>\n";
@@ -714,7 +752,7 @@ void WebServer::handleSettings() {
   String html = "<!DOCTYPE html>\n";
   html += "<html>\n";
   html += "<head>\n";
-  html += "  <title>Sensor Settings</title>\n";
+  html += "  <title>Settings</title>\n";
   html += "  <meta name='viewport' content='width=device-width, initial-scale=1'>\n";
   html += "  <style>\n";
   html += "    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }\n";
@@ -732,7 +770,7 @@ void WebServer::handleSettings() {
   html += "</head>\n";
   html += "<body>\n";
   html += "  <div class='container'>\n";
-  html += "    <h1>Sensor Settings</h1>\n";
+  html += "    <h1>Settings</h1>\n";
   
   // Add current time if available
   if (timeManager.isTimeInitialized()) {
@@ -753,6 +791,21 @@ void WebServer::handleSettings() {
   html += "        <button type='button' onclick='saveSensorConfig()'>Save Configuration</button>\n";
   html += "        <p id='configStatus'></p>\n";
   html += "      </form>\n";
+  html += "    </div>\n";
+
+  // Add OTA Update section
+  html += "    <div class='settings-form'>\n";
+  html += "      <h2>Software Update</h2>\n";
+  html += "      <p>Current Version: " + String(__DATE__ " " __TIME__) + "</p>\n";
+  html += "      <p>You can update the device's software using the Over-The-Air (OTA) update feature.</p>\n";
+  html += "      <p>Device hostname: " HOSTNAME ".local</p>\n";
+  html += "      <p>To update:</p>\n";
+  html += "      <ol>\n";
+  html += "        <li>Click 'Enable OTA Updates'</li>\n";
+  html += "        <li>Use PlatformIO to upload new firmware within 5 minutes</li>\n";
+  html += "      </ol>\n";
+  html += "      <button type='button' onclick='enableOTA()' class='button'>Enable OTA Updates</button>\n";
+  html += "      <p id='otaStatus'></p>\n";
   html += "    </div>\n";
   
   // Add navigation links
