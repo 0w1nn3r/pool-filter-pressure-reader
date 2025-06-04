@@ -182,8 +182,9 @@ void setup() {
                            currentBackflushType, *timeManager, *backflushLogger, *settings, *pressureLogger);
   webServer->begin();
   
-  // Connect WebServer to Display for OTA status
+  // Connect WebServer and Display for bidirectional communication
   displayManager->setWebServer(webServer);
+  webServer->setDisplay(displayManager);
   
   delay(2000);  // Display startup message for 2 seconds
 }

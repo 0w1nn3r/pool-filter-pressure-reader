@@ -214,6 +214,27 @@ void Display::updateDisplay() {
   display.display();
 }
 
+void Display::showFirmwareUpdateProgress(int percentage) {
+  if (!displayAvailable) return;
+  
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println(F("Updating firmware..."));
+  
+  // Draw progress bar
+  display.drawRect(0, 20, 128, 15, SSD1306_WHITE);
+  display.fillRect(2, 22, (int)((percentage / 100.0) * 124), 11, SSD1306_WHITE);
+  
+  // Display percentage
+  display.setTextSize(2);
+  display.setCursor(40, 40);
+  display.print(percentage);
+  display.print(F("%"));
+  
+  display.display();
+}
+
 bool Display::isDisplayAvailable() const {
   return displayAvailable;
 }

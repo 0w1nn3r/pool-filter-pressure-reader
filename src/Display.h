@@ -37,6 +37,7 @@ public:
     void setWebServer(WebServer* ws) { webServer = ws; }
     void showResetMessage();
     void updateDisplay();
+    void showFirmwareUpdateProgress(int percentage);
     bool isDisplayAvailable() const;
 };
 

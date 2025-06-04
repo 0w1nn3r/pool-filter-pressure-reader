@@ -48,7 +48,8 @@ WebServer::WebServer(float& pressure, int& rawADC, float& voltage, float& thresh
       settings(settings),
       otaEnabledTime(0),
       otaEnabled(false),
-      pressureLogger(pressureLog) {
+      pressureLogger(pressureLog),
+      display(nullptr) {
 }
 
 void WebServer::setupOTA() {
@@ -1188,9 +1189,22 @@ void WebServer::handleOTAUpload() {
         if (!Update.begin(maxSketchSpace)) {
             Update.printError(Serial);
         }
+        
+        // Show initial update screen on OLED
+        if (display) {
+            display->showFirmwareUpdateProgress(0);
+        }
     } 
     else if (upload.status == UPLOAD_FILE_WRITE) {
-        Serial.printf("Upload progress: %u bytes\n", upload.currentSize);
+        // Calculate progress percentage
+        int progress = (Update.progress() * 100) / Update.size();
+        Serial.printf("Upload progress: %u bytes (%d%%)\n", upload.currentSize, progress);
+        
+        // Update OLED display with progress
+        if (display) {
+            display->showFirmwareUpdateProgress(progress);
+        }
+        
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
             Update.printError(Serial);
         }
@@ -1198,16 +1212,39 @@ void WebServer::handleOTAUpload() {
     else if (upload.status == UPLOAD_FILE_END) {
         if (Update.end(true)) {
             Serial.printf("Update Success: %u bytes\n", upload.totalSize);
+            
+            // Show 100% on OLED
+            if (display) {
+                display->showFirmwareUpdateProgress(100);
+            }
+            
+            // Send response with redirect after 5 seconds
+            server.sendHeader("Connection", "close");
+            server.sendHeader("Access-Control-Allow-Origin", "*");
+            server.send(200, "text/html", 
+                "<!DOCTYPE html><html><head><title>Update Success</title>"
+                "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+                "<style>body{font-family:Arial,sans-serif;margin:20px;text-align:center;}"
+                "h1{color:#4CAF50;}</style>"
+                "<meta http-equiv='refresh' content='5;url=/'>"
+                "</head><body>"
+                "<h1>Update Successful!</h1>"
+                "<p>Device will restart now.</p>"
+                "<p>You will be redirected to the home page in 5 seconds...</p>"
+                "</body></html>");
+            
             // Restart ESP after a short delay
             delay(1000);
             ESP.restart();
         } else {
             Update.printError(Serial);
+            server.send(500, "text/plain", "UPDATE FAILED");
         }
     } 
     else if (upload.status == UPLOAD_FILE_ABORTED) {
         Update.end();
         Serial.println("Update aborted");
+        server.send(400, "text/plain", "Update aborted");
     }
     
     // Avoid timeout issues during upload

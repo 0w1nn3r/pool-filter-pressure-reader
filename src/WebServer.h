@@ -10,6 +10,7 @@
 #include "BackflushLogger.h"
 #include "Settings.h"
 #include "PressureLogger.h"
+#include "Display.h"
 
 // External pin definitions from main.cpp
 extern const int RELAY_PIN;
@@ -42,6 +43,9 @@ private:
     unsigned long otaEnabledTime;
     bool otaEnabled;
     static const unsigned long OTA_TIMEOUT = 300000; // 5 minutes in milliseconds
+    
+    // Display reference for OTA updates
+    Display* display;
 
     // Helper function to draw arc segments for the gauge
     String drawArcSegment(float cx, float cy, float radius, float startAngle, float endAngle, String color, float opacity);
@@ -70,6 +74,8 @@ public:
              bool& active, unsigned long& startTime, bool& configChanged,
              String& backflushType, TimeManager& tm, BackflushLogger& logger, 
              Settings& settings, PressureLogger& pressureLog);
+    
+    void setDisplay(Display* displayPtr) { display = displayPtr; }
     void begin();
     void handleClient();
     bool isOTAEnabled() const { return otaEnabled; }
