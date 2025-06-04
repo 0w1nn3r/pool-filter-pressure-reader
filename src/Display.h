@@ -7,6 +7,9 @@
 #include <ESP8266WiFi.h>
 #include "TimeManager.h"
 
+// Forward declaration
+class WebServer;
+
 class Display {
 private:
     Adafruit_SSD1306& display;
@@ -17,6 +20,9 @@ private:
     unsigned long& backflushStartTime;
     bool displayAvailable;
     TimeManager* timeManager;
+    WebServer* webServer;
+    unsigned long lastOtaFlashTime;
+    bool showOtaText;
 
 public:
     Display(Adafruit_SSD1306& oled, float& pressure, float& threshold, 
@@ -28,6 +34,7 @@ public:
     void showTimezone();
     void showWiFiSetupMode(String apName);
     void setTimeManager(TimeManager* tm) { timeManager = tm; }
+    void setWebServer(WebServer* ws) { webServer = ws; }
     void showResetMessage();
     void updateDisplay();
     bool isDisplayAvailable() const;

@@ -213,8 +213,6 @@ For security, the OTA update window is limited to 5 minutes. After this time, OT
 ## Future Improvements
 
 - Control of circulation pump
-- Implement alerts for high/low pressure conditions
-- Support for multiple pressure sensors
 - Implement MQTT support for IoT integration
 - Email or push notifications for backflush events
 - Mobile app integration

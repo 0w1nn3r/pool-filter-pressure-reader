@@ -31,7 +31,7 @@ String WebServer::drawArcSegment(float cx, float cy, float radius, float startAn
 
 WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration, 
                      bool& active, unsigned long& startTime, bool& configChanged,
-                     TimeManager& tm, BackflushLogger& logger, Settings& settings,
+                     String& backflushType, TimeManager& tm, BackflushLogger& logger, Settings& settings,
                      PressureLogger& pressureLog)
     : server(80), 
       currentPressure(pressure),
@@ -40,15 +40,20 @@ WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration,
       backflushActive(active),
       backflushStartTime(startTime),
       backflushConfigChanged(configChanged),
+      currentBackflushType(backflushType),
       timeManager(tm),
       backflushLogger(logger),
       settings(settings),
+      otaEnabledTime(0),
+      otaEnabled(false),
       pressureLogger(pressureLog) {
 }
 
 void WebServer::setupOTA() {
     // Configure OTA
     ArduinoOTA.setHostname(HOSTNAME);
+    ArduinoOTA.setPort(8266); // Explicitly set the default port
+    ArduinoOTA.setPassword(NULL); // No password protection
     
     ArduinoOTA.onStart([]() {
         String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
@@ -72,7 +77,12 @@ void WebServer::setupOTA() {
         else if (error == OTA_END_ERROR) Serial.println("End Failed");
     });
     
+    // Initialize OTA service
     ArduinoOTA.begin();
+    
+    Serial.println("OTA service initialized");
+    Serial.print("Device hostname: ");
+    Serial.println(HOSTNAME);
 }
 
 void WebServer::begin() {
@@ -101,11 +111,41 @@ void WebServer::begin() {
 
 void WebServer::handleClient() {
     server.handleClient();
+    
+    // Handle OTA updates
     ArduinoOTA.handle();
+    
+    // Check if OTA timeout has occurred
+    if (otaEnabled && (millis() - otaEnabledTime > OTA_TIMEOUT)) {
+        Serial.println("OTA update period expired");
+        otaEnabled = false;
+    }
 }
 
+
+
 void WebServer::handleOTAUpdate() {
+    // Stop any existing OTA service
+    ArduinoOTA.end();
+    
+    // Re-initialize OTA with explicit port
+    ArduinoOTA.setHostname(HOSTNAME);
     ArduinoOTA.setPassword(NULL);
+    ArduinoOTA.setPort(8266); // Explicitly set the default port
+   
+    // Set the time when OTA was enabled
+    otaEnabledTime = millis();
+    otaEnabled = true;
+    
+    // Restart OTA service
+    ArduinoOTA.begin();
+    
+    Serial.println("OTA updates enabled for 5 minutes on port 8266");
+    Serial.print("Device hostname: ");
+    Serial.println(HOSTNAME);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+    
     server.send(200, "text/plain", "OTA updates enabled for 5 minutes. Please upload firmware now.");
 }
 
@@ -238,7 +278,7 @@ void WebServer::handleRoot() {
   html += "        <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>\n";
   html += "        <a href='/pressure' style='margin-right: 15px;'>View Pressure History</a>\n";
   html += "        <a href='/settings' style='margin-right: 15px;'>Settings</a>\n";
-  html += "        <a href='/wifireset'>WiFi Settings</a>\n";
+  html += "        <a href='/wifi'>WiFi Settings</a>\n";
   html += "      </p>\n";
   html += "    </div>\n";
   
@@ -748,10 +788,26 @@ void WebServer::handleWiFiConfigPage() {
         if (n == 0) {
             options = "<option value='' disabled>No networks found</option>";
         } else {
-            options = "<option value=''>-- Select a Network --</option>";
+            // Create a vector of network info to sort by signal strength
+            struct NetworkInfo {
+                String ssid;
+                int32_t rssi;
+            };
+            std::vector<NetworkInfo> networks;
             for (int i = 0; i < n; ++i) {
-                // RSSI: WiFi.RSSI(i), Encryption: WiFi.encryptionType(i)
-                options += "<option value='" + WiFi.SSID(i) + "'>" + WiFi.SSID(i) + " (" + String(WiFi.RSSI(i)) + " dBm)</option>";
+                networks.push_back({WiFi.SSID(i), WiFi.RSSI(i)});
+            }
+            
+            // Sort networks by RSSI (strongest first)
+            std::sort(networks.begin(), networks.end(), 
+                [](const NetworkInfo& a, const NetworkInfo& b) {
+                    return a.rssi > b.rssi;
+                });
+            
+            options = "<option value=''>-- Select a Network --</option>";
+            for (const auto& network : networks) {
+                options += "<option value='" + network.ssid + "'>" + network.ssid + 
+                          " (" + String(network.rssi) + " dBm)</option>";
             }
         }
         // Replace the placeholder/scanning message with actual network options
@@ -778,6 +834,7 @@ void WebServer::handleManualBackflush() {
     // Start a backflush operation
     backflushActive = true;
     backflushStartTime = millis();
+    currentBackflushType = "Manual";  // Set the global backflush type to Manual
     
     // Log the manual backflush event with the current pressure
     backflushLogger.logEvent(currentPressure, backflushDuration, "Manual");
@@ -808,9 +865,7 @@ void WebServer::handleStopBackflush() {
     digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
     Serial.println("Manual backflush stopped");
     
-    // Log the stopped backflush with actual duration
-    String eventType = "Manual-Stopped";
-    backflushLogger.logEvent(currentPressure, elapsedTime, eventType);
+    // No longer logging backflush end events as per user request
     
     Serial.println("Backflush stopped manually");
     Serial.print("Actual duration: ");
@@ -907,6 +962,25 @@ void WebServer::handleSettings() {
   html += "          status.style.color = 'red';\n";
   html += "        });\n";
   html += "      }\n";
+  html += "\n";
+  html += "      function enableOTA() {\n";
+  html += "        const status = document.getElementById('otaStatus');\n";
+  html += "        status.textContent = 'Enabling OTA updates...';\n";
+  html += "        status.style.color = 'blue';\n";
+  html += "        \n";
+  html += "        fetch('/ota', {\n";
+  html += "          method: 'POST',\n";
+  html += "        })\n";
+  html += "        .then(response => response.text())\n";
+  html += "        .then(data => {\n";
+  html += "          status.textContent = data;\n";
+  html += "          status.style.color = 'green';\n";
+  html += "        })\n";
+  html += "        .catch(error => {\n";
+  html += "          status.textContent = 'Error: ' + error;\n";
+  html += "          status.style.color = 'red';\n";
+  html += "        });\n";
+  html += "      }\n";
   html += "    </script>\n";
   
   html += "  </div>\n";
@@ -915,6 +989,7 @@ void WebServer::handleSettings() {
   
   server.send(200, "text/html", html);
 }
+
 void WebServer::handleSensorConfig() {
     bool success = false;
     String message = "Failed to update sensor settings";
@@ -942,8 +1017,7 @@ void WebServer::handleSensorConfig() {
     }
     
     // Return JSON response instead of redirecting
-    String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
-    server.send(200, "application/json", jsonResponse);
+    server.send(200, "text/plain", message);
 }
 
 void WebServer::handlePressureCsv() {

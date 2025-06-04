@@ -24,10 +24,16 @@ private:
     bool& backflushActive;
     unsigned long& backflushStartTime;
     bool& backflushConfigChanged;
+    String& currentBackflushType;
     TimeManager& timeManager;
     BackflushLogger& backflushLogger;
     Settings& settings;
     PressureLogger& pressureLogger;
+    
+    // OTA update variables
+    unsigned long otaEnabledTime;
+    bool otaEnabled;
+    static const unsigned long OTA_TIMEOUT = 300000; // 5 minutes in milliseconds
 
     // Helper function to draw arc segments for the gauge
     String drawArcSegment(float cx, float cy, float radius, float startAngle, float endAngle, String color, float opacity);
@@ -51,11 +57,12 @@ private:
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 
-              bool& active, unsigned long& startTime, bool& configChanged,
-              TimeManager& tm, BackflushLogger& logger, Settings& settings,
-              PressureLogger& pressureLog);
+             bool& active, unsigned long& startTime, bool& configChanged,
+             String& backflushType, TimeManager& tm, BackflushLogger& logger, 
+             Settings& settings, PressureLogger& pressureLog);
     void begin();
     void handleClient();
+    bool isOTAEnabled() const { return otaEnabled; }
 };
 
 #endif // WEBSERVER_H

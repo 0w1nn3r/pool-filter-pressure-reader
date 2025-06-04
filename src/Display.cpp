@@ -1,4 +1,5 @@
 #include "Display.h"
+#include "WebServer.h"
 
 Display::Display(Adafruit_SSD1306& oled, float& pressure, float& threshold, 
                  unsigned int& duration, bool& active, unsigned long& startTime, TimeManager* tm)
@@ -9,7 +10,10 @@ Display::Display(Adafruit_SSD1306& oled, float& pressure, float& threshold,
       backflushActive(active),
       backflushStartTime(startTime),
       displayAvailable(false),
-      timeManager(tm) {
+      timeManager(tm),
+      webServer(nullptr),
+      lastOtaFlashTime(0),
+      showOtaText(false) {
 }
 
 bool Display::init() {
@@ -152,15 +156,44 @@ void Display::updateDisplay() {
     display.print(F("WiFi:[X]"));
   }
   
-  // Display pressure in large font in center
-  display.setTextSize(3);
-  display.setCursor(10, 20);
-  display.print(currentPressure, 1);
+  // Check if OTA mode is active and handle flashing display
+  bool otaActive = webServer && webServer->isOTAEnabled();
   
-  // Display bar unit
-  display.setTextSize(2);
-  display.setCursor(90, 30);
-  display.print(F("bar"));
+  // Flash between OTA text and pressure reading every 1000ms when OTA is active
+  if (otaActive) {
+    // Check if it's time to toggle the display
+    if (millis() - lastOtaFlashTime >= 1000) {
+      showOtaText = !showOtaText;
+      lastOtaFlashTime = millis();
+    }
+    
+    if (showOtaText) {
+      // Display OTA text in large font in center
+      display.setTextSize(3);
+      display.setCursor(30, 20);
+      display.print(F("OTA"));
+    } else {
+      // Display pressure in large font in center
+      display.setTextSize(3);
+      display.setCursor(10, 20);
+      display.print(currentPressure, 1);
+      
+      // Display bar unit
+      display.setTextSize(2);
+      display.setCursor(90, 30);
+      display.print(F("bar"));
+    }
+  } else {
+    // Normal display - just show pressure
+    display.setTextSize(3);
+    display.setCursor(10, 20);
+    display.print(currentPressure, 1);
+    
+    // Display bar unit
+    display.setTextSize(2);
+    display.setCursor(90, 30);
+    display.print(F("bar"));
+  }
   
   // Display backflush status at bottom
   display.setTextSize(1);

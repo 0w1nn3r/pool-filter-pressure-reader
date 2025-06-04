@@ -24,7 +24,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define PRESSURE_MIN 0.0   // Minimum pressure in bar
 float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (will be updated from settings)
 #define VOLTAGE_MIN 0.5    // Minimum voltage output (V)
-#define VOLTAGE_MAX 4.5    // Maximum voltage output (V)
+#define VOLTAGE_MAX 3.3    // Maximum voltage output (V)
 #define ADC_RESOLUTION 1024.0  // 10-bit ADC resolution
 
 // WiFi Configuration
@@ -60,6 +60,7 @@ bool backflushActive = false;
 unsigned long backflushStartTime = 0;
 float backflushTriggerPressure = 0.0;  // Store the pressure that triggered the backflush
 bool backflushConfigChanged = false;
+String currentBackflushType = "Auto";  // Track whether the current backflush is Auto or Manual
 
 // Function prototypes
 float readPressure();
@@ -77,7 +78,7 @@ void setup() {
   
   // Initialize relay pin
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);  // Ensure relay is off at startup
+  digitalWrite(RELAY_PIN, HIGH);  // Ensure relay is off at startup
   
   // Initialize onboard LED
   pinMode(LED_PIN, OUTPUT);
@@ -176,8 +177,11 @@ void setup() {
   // Initialize web server
   webServer = new WebServer(currentPressure, backflushThreshold, backflushDuration, 
                            backflushActive, backflushStartTime, backflushConfigChanged,
-                           *timeManager, *backflushLogger, *settings, *pressureLogger);
+                           currentBackflushType, *timeManager, *backflushLogger, *settings, *pressureLogger);
   webServer->begin();
+  
+  // Connect WebServer to Display for OTA status
+  displayManager->setWebServer(webServer);
   
   delay(2000);  // Display startup message for 2 seconds
 }
@@ -289,7 +293,8 @@ void handleBackflush() {
     backflushActive = true;
     backflushStartTime = millis();
     backflushTriggerPressure = currentPressure; // Store the pressure that triggered the backflush
-    digitalWrite(RELAY_PIN, HIGH);  // Activate relay
+    currentBackflushType = "Auto";  // Set type to Auto for automatic backflush
+    digitalWrite(RELAY_PIN, LOW);  // Activate relay
     digitalWrite(LED_PIN, LOW);    // Turn LED ON (inverse logic on NodeMCU)
     Serial.print("Backflush started at pressure: ");
     Serial.print(backflushTriggerPressure, 1);
@@ -302,19 +307,14 @@ void handleBackflush() {
     if (elapsedTime >= backflushDuration) {
       // Stop backflush
       backflushActive = false;
-      digitalWrite(RELAY_PIN, LOW);  // Deactivate relay
+      digitalWrite(RELAY_PIN, HIGH);  // Deactivate relay
       digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
       Serial.println("Backflush completed");
       
-      // Log the backflush event with the original trigger pressure
-      if (timeManager->isTimeInitialized()) {
-        backflushLogger->logEvent(backflushTriggerPressure, backflushDuration);
-        Serial.print("Backflush event logged with trigger pressure: ");
-        Serial.print(backflushTriggerPressure, 1);
-        Serial.println(" bar");
-      } else {
-        Serial.println("Backflush event not logged - time not initialized");
-      }
+      // No longer logging backflush end events as per user request
+      Serial.print("Backflush completed with trigger pressure: ");
+      Serial.print(backflushTriggerPressure, 1);
+      Serial.println(" bar");
     }
   }
 }
