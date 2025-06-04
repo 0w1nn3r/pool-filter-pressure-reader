@@ -101,6 +101,11 @@ void WebServer::begin() {
     server.on("/stopbackflush", HTTP_POST, std::bind(&WebServer::handleStopBackflush, this));
     server.on("/settings", [this]() { handleSettings(); });
     server.on("/ota", HTTP_POST, [this]() { handleOTAUpdate(); });
+    server.on("/otaupload", HTTP_GET, [this]() { handleOTAUploadPage(); });
+    server.on("/otaupload", HTTP_POST, 
+        [this](){ server.send(200, "text/plain", ""); }, 
+        [this](){ handleOTAUpload(); }
+    );
     server.on("/sensorconfig", HTTP_POST, std::bind(&WebServer::handleSensorConfig, this));
     server.on("/setretention", HTTP_POST, std::bind(&WebServer::handleSetRetention, this));
     server.on("/pressure.csv", [this]() { handlePressureCsv(); });
@@ -121,8 +126,6 @@ void WebServer::handleClient() {
         otaEnabled = false;
     }
 }
-
-
 
 void WebServer::handleOTAUpdate() {
     // Stop any existing OTA service
@@ -146,7 +149,19 @@ void WebServer::handleOTAUpdate() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
     
-    server.send(200, "text/plain", "OTA updates enabled for 5 minutes. Please upload firmware now.");
+    server.send(200, "text/html", 
+        "<!DOCTYPE html><html><head><title>OTA Update</title>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<style>body{font-family:Arial,sans-serif;margin:20px;text-align:center;}"
+        "a{display:inline-block;background:#4CAF50;color:white;padding:10px 20px;"
+        "text-decoration:none;border-radius:5px;margin-top:20px;}</style></head>"
+        "<body><h1>OTA Update Mode Enabled</h1>"
+        "<p>OTA updates enabled for 5 minutes.</p>"
+        "<p>You can now upload firmware using the Arduino IDE or PlatformIO.</p>"
+        "<p>Or use the web uploader:</p>"
+        "<a href='/otaupload'>Web Firmware Uploader</a>"
+        "<p><a href='/' style='background:#2196F3;'>Back to Home</a></p>"
+        "</body></html>");
 }
 
 void WebServer::handleRoot() {
@@ -928,13 +943,24 @@ void WebServer::handleSettings() {
   html += "      <p>Current Version: " + String(__DATE__ " " __TIME__) + "</p>\n";
   html += "      <p>You can update the device's software using the Over-The-Air (OTA) update feature.</p>\n";
   html += "      <p>Device hostname: " HOSTNAME ".local</p>\n";
-  html += "      <p>To update:</p>\n";
-  html += "      <ol>\n";
-  html += "        <li>Click 'Enable OTA Updates'</li>\n";
-  html += "        <li>Use PlatformIO to upload new firmware within 5 minutes</li>\n";
-  html += "      </ol>\n";
-  html += "      <button type='button' onclick='enableOTA()' class='button'>Enable OTA Updates</button>\n";
-  html += "      <p id='otaStatus'></p>\n";
+  html += "      <p>Update options:</p>\n";
+  html += "      <div style='margin: 20px 0;'>\n";
+  html += "        <h3>Option 1: IDE Upload</h3>\n";
+  html += "        <ol>\n";
+  html += "          <li>Click 'Enable OTA Updates'</li>\n";
+  html += "          <li>Use PlatformIO or Arduino IDE to upload new firmware within 5 minutes</li>\n";
+  html += "        </ol>\n";
+  html += "        <button type='button' onclick='enableOTA()' class='button'>Enable OTA Updates</button>\n";
+  html += "        <p id='otaStatus'></p>\n";
+  html += "      </div>\n";
+  html += "      <div style='margin: 20px 0;'>\n";
+  html += "        <h3>Option 2: Web Upload</h3>\n";
+  html += "        <ol>\n";
+  html += "          <li>Click the button below to go to the web uploader</li>\n";
+  html += "          <li>Select a firmware .bin file and upload it directly</li>\n";
+  html += "        </ol>\n";
+  html += "        <a href='/otaupload' class='button' style='background-color: #e67e22;'>Web Firmware Uploader</a>\n";
+  html += "      </div>\n";
   html += "    </div>\n";
   
   // Add navigation links
@@ -1065,4 +1091,106 @@ void WebServer::handleSetRetention() {
     // Return JSON response instead of redirecting
     String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
     server.send(200, "application/json", jsonResponse);
+}
+
+void WebServer::handleOTAUploadPage() {
+    String html = "<!DOCTYPE html>\n";
+    html += "<html>\n";
+    html += "<head>\n";
+    html += "  <title>OTA Firmware Update</title>\n";
+    html += "  <meta name='viewport' content='width=device-width, initial-scale=1'>\n";
+    html += "  <style>\n";
+    html += "    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; }\n";
+    html += "    .container { max-width: 600px; margin: 0 auto; }\n";
+    html += "    .upload-form { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }\n";
+    html += "    .btn { background-color: #4CAF50; border: none; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin-top: 20px; cursor: pointer; border-radius: 5px; }\n";
+    html += "    .warning { color: #f44336; }\n";
+    html += "    .progress { width: 100%; background-color: #f1f1f1; border-radius: 5px; margin: 10px 0; display: none; }\n";
+    html += "    .progress-bar { width: 0%; height: 30px; background-color: #4CAF50; border-radius: 5px; text-align: center; line-height: 30px; color: white; }\n";
+    html += "  </style>\n";
+    html += "</head>\n";
+    html += "<body>\n";
+    html += "  <div class='container'>\n";
+    html += "    <h1>OTA Firmware Update</h1>\n";
+    html += "    <p>Upload a new firmware file (.bin) to update the device.</p>\n";
+    html += "    <div class='upload-form'>\n";
+    html += "      <form method='POST' action='/otaupload' enctype='multipart/form-data' id='upload_form'>\n";
+    html += "        <p><input type='file' name='update' accept='.bin'></p>\n";
+    html += "        <p><button type='submit' class='btn'>Update Firmware</button></p>\n";
+    html += "      </form>\n";
+    html += "      <div class='progress' id='progress'>\n";
+    html += "        <div class='progress-bar' id='progress-bar'>0%</div>\n";
+    html += "      </div>\n";
+    html += "    </div>\n";
+    html += "    <p class='warning'><strong>Warning:</strong> Do not interrupt the update process or power off the device during update!</p>\n";
+    html += "    <p><a href='/' class='btn' style='background-color: #2196F3;'>Back to Home</a></p>\n";
+    html += "  </div>\n";
+    html += "  <script>\n";
+    html += "    document.getElementById('upload_form').onsubmit = function(e) {\n";
+    html += "      e.preventDefault();\n";
+    html += "      var form = document.getElementById('upload_form');\n";
+    html += "      var data = new FormData(form);\n";
+    html += "      var xhr = new XMLHttpRequest();\n";
+    html += "      document.getElementById('progress').style.display = 'block';\n";
+    html += "      xhr.open('POST', form.action, true);\n";
+    html += "      xhr.upload.onprogress = function(e) {\n";
+    html += "        if (e.lengthComputable) {\n";
+    html += "          var percent = Math.round((e.loaded / e.total) * 100);\n";
+    html += "          document.getElementById('progress-bar').style.width = percent + '%';\n";
+    html += "          document.getElementById('progress-bar').innerHTML = percent + '%';\n";
+    html += "        }\n";
+    html += "      };\n";
+    html += "      xhr.onreadystatechange = function() {\n";
+    html += "        if (xhr.readyState === 4) {\n";
+    html += "          if (xhr.status === 200) {\n";
+    html += "            alert('Update successful! The device will restart.');\n";
+    html += "          } else {\n";
+    html += "            alert('Update failed with status: ' + xhr.status);\n";
+    html += "          }\n";
+    html += "        }\n";
+    html += "      };\n";
+    html += "      xhr.send(data);\n";
+    html += "    };\n";
+    html += "  </script>\n";
+    html += "</body>\n";
+    html += "</html>\n";
+    
+    server.send(200, "text/html", html);
+}
+
+void WebServer::handleOTAUpload() {
+    HTTPUpload& upload = server.upload();
+    
+    if (upload.status == UPLOAD_FILE_START) {
+        Serial.printf("Update: %s\n", upload.filename.c_str());
+        
+        // Start with max available size
+        uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+        if (!Update.begin(maxSketchSpace)) {
+            Update.printError(Serial);
+        }
+    } 
+    else if (upload.status == UPLOAD_FILE_WRITE) {
+        Serial.printf("Upload progress: %u bytes\n", upload.currentSize);
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+            Update.printError(Serial);
+        }
+    } 
+    else if (upload.status == UPLOAD_FILE_END) {
+        if (Update.end(true)) {
+            Serial.printf("Update Success: %u bytes\n", upload.totalSize);
+            // Restart ESP after a short delay
+            delay(1000);
+            ESP.restart();
+        } else {
+            Update.printError(Serial);
+        }
+    } 
+    else if (upload.status == UPLOAD_FILE_ABORTED) {
+        Update.end();
+        Serial.println("Update aborted");
+    }
+    
+    // Avoid timeout issues during upload
+    yield();
 }

@@ -54,6 +54,8 @@ private:
     void handlePressureCsv();
     void handleOTAUpdate();
     void setupOTA();
+    void handleOTAUploadPage();
+    void handleOTAUpload();
 
 public:
     WebServer(float& pressure, float& threshold, unsigned int& duration, 
