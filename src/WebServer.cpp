@@ -1141,42 +1141,54 @@ void WebServer::handleOTAUploadPage() {
     html += "      <div class='progress' id='progress'>\n";
     html += "        <div class='progress-bar' id='progress-bar'>0%</div>\n";
     html += "      </div>\n";
+    html += "      <p id='status'></p>\n";
     html += "    </div>\n";
-    html += "    <p class='warning'><strong>Warning:</strong> Do not interrupt the update process or power off the device during update!</p>\n";
-    html += "    <p><a href='/' class='btn' style='background-color: #2196F3;'>Back to Home</a></p>\n";
+    html += "    <p class='warning'>Warning: Do not disconnect or power off the device during update!</p>\n";
+    html += "    <p><a href='/settings'>Back to Settings</a></p>\n";
     html += "  </div>\n";
     html += "  <script>\n";
-    html += "    document.getElementById('upload_form').onsubmit = function(e) {\n";
+    html += "    document.getElementById('upload_form').addEventListener('submit', function(e) {\n";
     html += "      e.preventDefault();\n";
     html += "      var form = document.getElementById('upload_form');\n";
-    html += "      var data = new FormData(form);\n";
+    html += "      var formData = new FormData(form);\n";
     html += "      var xhr = new XMLHttpRequest();\n";
-    html += "      document.getElementById('progress').style.display = 'block';\n";
-    html += "      xhr.open('POST', form.action, true);\n";
-    html += "      xhr.upload.onprogress = function(e) {\n";
+    html += "      var progressBar = document.getElementById('progress-bar');\n";
+    html += "      var progressDiv = document.getElementById('progress');\n";
+    html += "      var statusDiv = document.getElementById('status');\n";
+    html += "      progressDiv.style.display = 'block';\n";
+    html += "      xhr.upload.addEventListener('progress', function(e) {\n";
     html += "        if (e.lengthComputable) {\n";
     html += "          var percent = Math.round((e.loaded / e.total) * 100);\n";
-    html += "          document.getElementById('progress-bar').style.width = percent + '%';\n";
-    html += "          document.getElementById('progress-bar').innerHTML = percent + '%';\n";
+    html += "          progressBar.style.width = percent + '%';\n";
+    html += "          progressBar.innerHTML = percent + '%';\n";
+    html += "          statusDiv.innerHTML = 'Uploading firmware: ' + percent + '%';\n";
     html += "        }\n";
-    html += "      };\n";
-    html += "      xhr.onreadystatechange = function() {\n";
-    html += "        if (xhr.readyState === 4) {\n";
-    html += "          if (xhr.status === 200) {\n";
-    html += "            alert('Update successful! The device will restart.');\n";
-    html += "          } else {\n";
-    html += "            alert('Update failed with status: ' + xhr.status);\n";
-    html += "          }\n";
+    html += "      });\n";
+    html += "      xhr.addEventListener('load', function(e) {\n";
+    html += "        if (xhr.status === 200) {\n";
+    html += "          statusDiv.innerHTML = 'Upload complete. Device is restarting...';\n";
+    html += "          // Redirect to home page after 5 seconds\n";
+    html += "          setTimeout(function() {\n";
+    html += "            window.location.href = '/';\n";
+    html += "          }, 5000);\n";
+    html += "        } else {\n";
+    html += "          statusDiv.innerHTML = 'Error: ' + xhr.responseText;\n";
     html += "        }\n";
-    html += "      };\n";
-    html += "      xhr.send(data);\n";
-    html += "    };\n";
+    html += "      });\n";
+    html += "      xhr.addEventListener('error', function(e) {\n";
+    html += "        statusDiv.innerHTML = 'Upload failed';\n";
+    html += "      });\n";
+    html += "      xhr.open('POST', '/otaupload', true);\n";
+    html += "      xhr.send(formData);\n";
+    html += "    });\n";
     html += "  </script>\n";
     html += "</body>\n";
     html += "</html>\n";
     
     server.send(200, "text/html", html);
 }
+
+
 
 void WebServer::handleOTAUpload() {
     HTTPUpload& upload = server.upload();
@@ -1196,9 +1208,10 @@ void WebServer::handleOTAUpload() {
         }
     } 
     else if (upload.status == UPLOAD_FILE_WRITE) {
-        // Calculate progress percentage
+        // Calculate progress percentage based on Update library
         int progress = (Update.progress() * 100) / Update.size();
-        Serial.printf("Upload progress: %u bytes (%d%%)\n", upload.currentSize, progress);
+        
+        Serial.printf("Upload progress: %d%%\n", progress);
         
         // Update OLED display with progress
         if (display) {
