@@ -154,7 +154,7 @@ The top row shows WiFi signal strength and the last two octets of the IP address
 - `/clearlog` - Clear the backflush event log (redirects to log page)
 - `/pressure` - Pressure history page with interactive graph
 - `/clearpressure` - Clear the pressure history data (redirects to pressure page)
-- `/wifireset` - WiFi settings page with option to reset WiFi configuration
+- `/wifi` - WiFi settings page to scan/select new WiFi networks, connect, or reset current configuration.
 - `/manualbackflush` - POST endpoint to trigger a manual backflush operation
 - `/stopbackflush` - POST endpoint to stop an active backflush
 - `/settings` - Device settings page for sensor configuration and software updates
