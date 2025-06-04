@@ -15,10 +15,18 @@
 extern const int RELAY_PIN;
 extern const int LED_PIN;
 
+// External pressure sensor constants from main.cpp
+extern float PRESSURE_MAX;
+extern const float PRESSURE_MIN;
+extern const float VOLTAGE_MIN;
+extern const float VOLTAGE_MAX;
+
 class WebServer {
 private:
     ESP8266WebServer server;
     float& currentPressure;
+    int& rawADCValue;         // Reference to raw ADC value
+    float& sensorVoltage;     // Reference to sensor voltage
     float& backflushThreshold;
     unsigned int& backflushDuration;
     bool& backflushActive;
@@ -58,7 +66,7 @@ private:
     void handleOTAUpload();
 
 public:
-    WebServer(float& pressure, float& threshold, unsigned int& duration, 
+    WebServer(float& pressure, int& rawADC, float& voltage, float& threshold, unsigned int& duration, 
              bool& active, unsigned long& startTime, bool& configChanged,
              String& backflushType, TimeManager& tm, BackflushLogger& logger, 
              Settings& settings, PressureLogger& pressureLog);

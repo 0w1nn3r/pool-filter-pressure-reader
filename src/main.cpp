@@ -21,11 +21,11 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Pressure Sensor Configuration
 #define PRESSURE_PIN A0  // Analog pin for pressure sensor
-#define PRESSURE_MIN 0.0   // Minimum pressure in bar
+const float PRESSURE_MIN = 0.0;   // Minimum pressure in bar
 float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (will be updated from settings)
-#define VOLTAGE_MIN 0.5    // Minimum voltage output (V)
-#define VOLTAGE_MAX 3.3    // Maximum voltage output (V)
-#define ADC_RESOLUTION 1024.0  // 10-bit ADC resolution
+const float VOLTAGE_MIN = 0.5;    // Minimum voltage output (V)
+const float VOLTAGE_MAX = 3.3;    // Maximum voltage output (V)
+const float ADC_RESOLUTION = 1024.0;  // 10-bit ADC resolution
 
 // WiFi Configuration
 #define WIFI_AP_NAME "PoolPressure-Setup"
@@ -50,6 +50,8 @@ PressureLogger* pressureLogger;
 
 // Variables
 float currentPressure = 0.0;
+int rawADCValue = 0;      // Store the raw ADC reading
+float sensorVoltage = 0.0; // Store the voltage reading
 unsigned long lastReadTime = 0;
 const unsigned long readInterval = 1000;  // Read pressure every 1 second
 
@@ -175,7 +177,7 @@ void setup() {
   pressureLogger->begin();
   
   // Initialize web server
-  webServer = new WebServer(currentPressure, backflushThreshold, backflushDuration, 
+  webServer = new WebServer(currentPressure, rawADCValue, sensorVoltage, backflushThreshold, backflushDuration, 
                            backflushActive, backflushStartTime, backflushConfigChanged,
                            currentBackflushType, *timeManager, *backflushLogger, *settings, *pressureLogger);
   webServer->begin();
@@ -220,22 +222,22 @@ void loop() {
 
 float readPressure() {
   // Read analog value from pressure sensor
-  int rawValue = analogRead(PRESSURE_PIN);
+  rawADCValue = analogRead(PRESSURE_PIN);
   
   // Convert analog reading to voltage
-  float voltage = (rawValue / ADC_RESOLUTION) * 3.3;  // ESP8266 ADC is 3.3V reference
+  sensorVoltage = (rawADCValue / ADC_RESOLUTION) * 3.3;  // ESP8266 ADC is 3.3V reference
   
   // Convert voltage to pressure (bar)
   // Using linear mapping: pressure = (voltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN
-  float pressure = (voltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN;
+  float pressure = (sensorVoltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN;
   
   // Constrain pressure to valid range
   pressure = constrain(pressure, PRESSURE_MIN, PRESSURE_MAX);
   
   Serial.print("Raw ADC: ");
-  Serial.print(rawValue);
+  Serial.print(rawADCValue);
   Serial.print(", Voltage: ");
-  Serial.print(voltage);
+  Serial.print(sensorVoltage);
   Serial.print("V, Pressure: ");
   Serial.print(pressure);
   Serial.println(" bar");

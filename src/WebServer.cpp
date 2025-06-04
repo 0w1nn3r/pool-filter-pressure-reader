@@ -29,12 +29,14 @@ String WebServer::drawArcSegment(float cx, float cy, float radius, float startAn
   return path;
 }
 
-WebServer::WebServer(float& pressure, float& threshold, unsigned int& duration, 
+WebServer::WebServer(float& pressure, int& rawADC, float& voltage, float& threshold, unsigned int& duration, 
                      bool& active, unsigned long& startTime, bool& configChanged,
                      String& backflushType, TimeManager& tm, BackflushLogger& logger, Settings& settings,
                      PressureLogger& pressureLog)
     : server(80), 
       currentPressure(pressure),
+      rawADCValue(rawADC),
+      sensorVoltage(voltage),
       backflushThreshold(threshold),
       backflushDuration(duration),
       backflushActive(active),
@@ -926,15 +928,32 @@ void WebServer::handleSettings() {
   html += "    <div class='settings-form'>\n";
   html += "      <h2>Pressure Sensor Configuration</h2>\n";
   html += "      <p>Configure your pressure sensor by setting its maximum pressure range.</p>\n";
-  html += "      <form id='sensorForm'>\n";
-  html += "        <div class='form-group'>\n";
-  html += "          <label for='sensormax'>Maximum Pressure (bar):</label>\n";
-  html += "          <input type='number' id='sensormax' name='sensormax' min='1.0' max='10.0' step='0.5' value='" + String(PRESSURE_MAX, 1) + "'>\n";
-  html += "          <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>\n";
+  html += "      <div style='display: flex; justify-content: space-between;'>\n";
+  html += "        <div style='flex: 1;'>\n";
+  html += "          <form id='sensorForm'>\n";
+  html += "            <div class='form-group'>\n";
+  html += "              <label for='sensormax'>Maximum Pressure (bar):</label>\n";
+  html += "              <input type='number' id='sensormax' name='sensormax' min='1.0' max='10.0' step='0.5' value='" + String(PRESSURE_MAX, 1) + "'>\n";
+  html += "              <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>\n";
+  html += "            </div>\n";
+  html += "            <button type='button' onclick='saveSensorConfig()'>Save Configuration</button>\n";
+  html += "            <p id='configStatus'></p>\n";
+  html += "          </form>\n";
   html += "        </div>\n";
-  html += "        <button type='button' onclick='saveSensorConfig()'>Save Configuration</button>\n";
-  html += "        <p id='configStatus'></p>\n";
-  html += "      </form>\n";
+  html += "        <div style='flex: 1; border-left: 1px solid #ddd; padding-left: 20px; margin-left: 20px;'>\n";
+  html += "          <h3>Sensor Debug Info</h3>\n";
+  html += "          <table style='width: 100%; border-collapse: collapse;'>\n";
+  html += "            <tr><td style='padding: 5px 0;'><strong>Raw ADC Value:</strong></td><td>" + String(rawADCValue) + " / 1023</td></tr>\n";
+  html += "            <tr><td style='padding: 5px 0;'><strong>Voltage:</strong></td><td>" + String(sensorVoltage, 3) + " V</td></tr>\n";
+  html += "            <tr><td style='padding: 5px 0;'><strong>Pressure:</strong></td><td>" + String(currentPressure, 2) + " bar</td></tr>\n";
+  html += "            <tr><td style='padding: 5px 0;'><strong>Min Voltage:</strong></td><td>" + String(VOLTAGE_MIN, 2) + " V</td></tr>\n";
+  html += "            <tr><td style='padding: 5px 0;'><strong>Max Voltage:</strong></td><td>" + String(VOLTAGE_MAX, 2) + " V</td></tr>\n";
+  html += "            <tr><td style='padding: 5px 0;'><strong>Min Pressure:</strong></td><td>" + String(PRESSURE_MIN, 1) + " bar</td></tr>\n";
+  html += "            <tr><td style='padding: 5px 0;'><strong>Max Pressure:</strong></td><td>" + String(PRESSURE_MAX, 1) + " bar</td></tr>\n";
+  html += "          </table>\n";
+  html += "          <p><small>This information updates when you refresh the page</small></p>\n";
+  html += "        </div>\n";
+  html += "      </div>\n";
   html += "    </div>\n";
 
   // Add OTA Update section
