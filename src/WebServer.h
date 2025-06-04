@@ -39,7 +39,7 @@ private:
     void handleClearLog();
     void handlePressureHistory();
     void handleClearPressureHistory();
-    void handleWiFiReset();
+    void handleWiFiConfigPage();
     void handleManualBackflush();
     void handleStopBackflush();
     void handleSettings();

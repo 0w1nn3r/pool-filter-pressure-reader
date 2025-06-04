@@ -86,7 +86,7 @@ void WebServer::begin() {
     server.on("/clearlog", [this]() { handleClearLog(); });
     server.on("/pressure", [this]() { handlePressureHistory(); });
     server.on("/clearpressure", [this]() { handleClearPressureHistory(); });
-    server.on("/wifireset", [this]() { handleWiFiReset(); });
+    server.on("/wifi", HTTP_ANY, [this]() { handleWiFiConfigPage(); });
     server.on("/manualbackflush", HTTP_POST, std::bind(&WebServer::handleManualBackflush, this));
     server.on("/stopbackflush", HTTP_POST, std::bind(&WebServer::handleStopBackflush, this));
     server.on("/settings", [this]() { handleSettings(); });
@@ -632,7 +632,7 @@ void WebServer::handleClearPressureHistory() {
     server.send(303); // Redirect back to pressure history page
 }
 
-void WebServer::handleWiFiReset() {
+void WebServer::handleWiFiConfigPage() {
     String html = "<!DOCTYPE html>\n";
     html += "<html>\n";
     html += "<head>\n";
@@ -658,15 +658,32 @@ void WebServer::handleWiFiReset() {
     html += "      <p>Signal Strength: " + String(WiFi.RSSI()) + " dBm</p>\n";
     html += "    </div>\n";
     
+    // WiFi Scanning and Selection Form
+    html += "    <h2>Connect to a New Network</h2>\n";
+    html += "    <form method='POST' action='/wifi'>\n";
+    html += "      <label for='ssid'>Select Network:</label><br>\n";
+    html += "      <select name='ssid' id='ssid' style='padding: 8px; margin-bottom: 10px; width: 100%; max-width: 300px;'>\n";
+    html += "        <option value=''>-- Scan for networks --</option>\n"; // Placeholder
+    // Scan for networks if it's a GET request and not a POST trying to connect/reset
+    if (server.method() == HTTP_GET) {
+      html += "        <option value='' disabled>Scanning...</option>\n"; // Temporary message
+    }
+    html += "      </select><br><br>\n";
+    html += "      <label for='manual_ssid'>Or Enter SSID Manually:</label><br>\n";
+    html += "      <input type='text' id='manual_ssid' name='manual_ssid' style='padding: 8px; margin-bottom: 10px; width: calc(100% - 18px); max-width: 282px;'><br><br>\n";
+    html += "      <label for='password'>Password:</label><br>\n";
+    html += "      <input type='password' id='password' name='password' style='padding: 8px; margin-bottom: 20px; width: calc(100% - 18px); max-width: 282px;'><br><br>\n";
+    html += "      <button type='submit' name='action' value='connect' class='button' style='background-color: #28a745;'>Connect to WiFi</button>\n";
+    html += "    </form><br>\n";
+
+    html += "    <h2>Reset Current Settings</h2>\n";
     html += "    <div class='info'>\n";
-    html += "      <p>To change WiFi settings, click the button below.</p>\n";
+    html += "      <p>Alternatively, you can reset all WiFi settings.</p>\n";
     html += "      <p>The device will restart in configuration mode, creating a WiFi access point named <strong>PoolFilterAP</strong>.</p>\n";
     html += "      <p>Connect to this network and navigate to <strong>192.168.4.1</strong> to configure your new WiFi settings.</p>\n";
     html += "    </div>\n";
-    
-    // Add confirmation form with POST method for security
-    html += "    <form method='POST' onsubmit='return confirm(\"Are you sure you want to reset WiFi settings? The device will restart.\");'>\n";
-    html += "      <button type='submit' name='reset' value='true' class='button'>Reset WiFi Settings</button>\n";
+    html += "    <form method='POST' action='/wifi' onsubmit='return confirm(\"Are you sure you want to reset WiFi settings? The device will restart.\");'>\n";
+    html += "      <button type='submit' name='action' value='reset' class='button'>Reset WiFi Settings</button>\n";
     html += "    </form>\n";
     
     html += "    <a href='/' class='back-link'>Back to Home</a>\n";
@@ -674,17 +691,74 @@ void WebServer::handleWiFiReset() {
     html += "</body>\n";
     html += "</html>\n";
     
-    // Check if this is a POST request to reset WiFi
-    if (server.method() == HTTP_POST && server.hasArg("reset")) {
-        server.send(200, "text/html", "<html><body><h1>Resetting WiFi settings...</h1><p>The device will restart in configuration mode.</p></body></html>");
-        delay(1000);
-        // Reset WiFi settings and restart
-        WiFi.disconnect(true);
-        delay(1000);
-        ESP.restart();
-    } else {
-        server.send(200, "text/html", html);
+    if (server.method() == HTTP_POST) {
+        if (server.hasArg("action")) {
+            String action = server.arg("action");
+            if (action == "reset") {
+                server.send(200, "text/html", "<html><head><meta http-equiv='refresh' content='5;url=/'></head><body><h1>Resetting WiFi settings...</h1><p>The device will restart in configuration mode. You will be redirected shortly.</p></body></html>");
+                delay(1000);
+                WiFi.disconnect(true);
+                // Consider saving a flag to EEPROM/NVS to indicate AP mode on next boot
+                delay(1000);
+                ESP.restart();
+            } else if (action == "connect") {
+                String selectedSsid = server.arg("ssid");
+                String manualSsid = server.arg("manual_ssid");
+                String password = server.arg("password");
+                String finalSsid = manualSsid; // Prioritize manual SSID
+
+                if (manualSsid.length() == 0 && selectedSsid.length() > 0) { // If manual is empty, use selected
+                    finalSsid = selectedSsid;
+                }
+
+                if (finalSsid.length() > 0) {
+                    String connectingHtml = "<html><head><meta http-equiv='refresh' content='10;url=/wifi'></head><body><h1>Connecting to " + finalSsid + "...</h1><p>Please wait. You will be redirected back to the WiFi page in 10 seconds.</p></body></html>";
+                    server.send(200, "text/html", connectingHtml);
+                    delay(100); // Allow server to send response
+                    
+                    Serial.println("Attempting to connect to SSID: " + finalSsid);
+                    WiFi.disconnect(true); // Disconnect from any current network or AP mode
+                    delay(500);
+                    WiFi.mode(WIFI_STA);
+                    WiFi.begin(finalSsid.c_str(), password.c_str());
+                    
+                    // Add logic here to save credentials if needed (e.g., to EEPROM/NVS)
+                    // For now, relying on ESP32's default behavior or WiFiManager if used previously.
+                    // If using WiFiManager, it usually handles saving credentials automatically.
+                    // If not, you'd call something like: preferences.begin("wifi-creds", false); preferences.putString("ssid", finalSsid); preferences.putString("password", password); preferences.end();
+
+                    // The page will auto-refresh. The status will be visible on the main /wifi page then.
+                    // A more robust solution would be to wait for connection status here and display a specific success/failure message.
+                } else {
+                    server.send(200, "text/html", "<html><head><meta http-equiv='refresh' content='5;url=/wifi'></head><body><h1>Connection Error</h1><p>SSID cannot be empty. Please select a network or enter an SSID manually. Redirecting...</p></body></html>");
+                }
+                return; // Important to return after handling POST to prevent sending the form page again
+            }
+        }
     }
+
+    // For GET requests, or if POST was not handled above, send the main page HTML
+    // If it's a GET request, perform the scan and populate the dropdown
+    String finalHtml = html; // Start with the base HTML
+    if (server.method() == HTTP_GET) {
+        Serial.println("Scanning for WiFi networks...");
+        int n = WiFi.scanNetworks(false, true); // (async, show_hidden)
+        Serial.print(n); Serial.println(" networks found");
+        String options = "";
+        if (n == 0) {
+            options = "<option value='' disabled>No networks found</option>";
+        } else {
+            options = "<option value=''>-- Select a Network --</option>";
+            for (int i = 0; i < n; ++i) {
+                // RSSI: WiFi.RSSI(i), Encryption: WiFi.encryptionType(i)
+                options += "<option value='" + WiFi.SSID(i) + "'>" + WiFi.SSID(i) + " (" + String(WiFi.RSSI(i)) + " dBm)</option>";
+            }
+        }
+        // Replace the placeholder/scanning message with actual network options
+        finalHtml.replace("        <option value='' disabled>Scanning...</option>\n", options);
+        WiFi.scanDelete(); // Free memory from scan results
+    }
+    server.send(200, "text/html", finalHtml);
 }
 
 void WebServer::handleManualBackflush() {
