@@ -130,18 +130,7 @@ void setup() {
       
       // Update countdown display
       int remainingSeconds = countdownSeconds - ((millis() - startTime) / 1000);
-      display.clearDisplay();
-      display.setTextSize(1);
-      display.setTextColor(WHITE);
-      display.setCursor(0, 0);
-      display.println(F("Hold for factory reset"));
-      display.println();
-      display.setTextSize(2);
-      display.print(F("  "));
-      display.print(remainingSeconds);
-      display.println(F(" sec"));
-      display.display();
-      
+      displayManager->showResetCountdown("Hold for factory reset", remainingSeconds);
       delay(100);  // Small delay to prevent display flicker
     }
     
@@ -220,6 +209,21 @@ void loop() {
     backflushConfigChanged = false;
   }
 
+  // Handle reset button - power cycle if held for 3 seconds
+  static unsigned long reset_button_pressed_time = 0;
+  if (digitalRead(RESET_BUTTON_PIN) == LOW) {
+    if (reset_button_pressed_time == 0) {
+      reset_button_pressed_time = millis();
+    }
+    int remainingSeconds = 3 - ((millis() - reset_button_pressed_time) / 1000);
+    displayManager->showResetCountdown("Hold to restart", remainingSeconds);
+    
+    if (millis() - reset_button_pressed_time >= 3000) {
+      ESP.restart();
+    }
+  } else {
+    reset_button_pressed_time = 0;
+  }
   delay(50);
 }
 

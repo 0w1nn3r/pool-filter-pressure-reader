@@ -238,3 +238,17 @@ void Display::showFirmwareUpdateProgress(int percentage) {
 bool Display::isDisplayAvailable() const {
   return displayAvailable;
 }
+
+void Display::showResetCountdown(String message, unsigned int countdownSeconds) {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.println(message);
+  display.println();
+  display.setTextSize(2);
+  display.print(F("  "));
+  display.print(countdownSeconds);
+  display.println(F(" sec"));
+  display.display();
+}

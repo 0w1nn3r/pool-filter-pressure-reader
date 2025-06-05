@@ -39,6 +39,7 @@ public:
     void updateDisplay();
     void showFirmwareUpdateProgress(int percentage);
     bool isDisplayAvailable() const;
+    void showResetCountdown(String message, unsigned int countdownSeconds);
 };
 
 #endif // DISPLAY_H
