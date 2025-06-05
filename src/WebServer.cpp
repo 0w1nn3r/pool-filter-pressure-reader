@@ -171,143 +171,145 @@ void WebServer::handleOTAUpdate() {
 
 void WebServer::handleCSS() {
   Serial.println("Serving CSS");
-  String css = "body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; color: #333; }\n";
-  css += ".container { max-width: 600px; margin: 0 auto; }\n";
-  css += ".pressure-display { font-size: 48px; margin: 20px 0; }\n";
-  css += ".info { font-size: 14px; color: #666; margin-top: 40px; }\n";
-  css += ".gauge-container { width: 250px; height: 250px; margin: 20px auto; position: relative; }\n";
-  css += ".gauge-bg { fill: #f0f0f0; }\n";
-  css += ".gauge-dial { fill: none; stroke-width: 10; stroke-linecap: round; }\n";
-  css += ".gauge-value-text { font-family: Arial; font-size: 24px; font-weight: bold; text-anchor: middle; }\n";
-  css += ".gauge-label { font-family: Arial; font-size: 12px; text-anchor: middle; }\n";
-  css += ".gauge-tick { stroke: #333; stroke-width: 1; }\n";
-  css += ".gauge-tick-label { font-family: Arial; font-size: 10px; text-anchor: middle; }\n";
-  css += ".gauge-pointer { stroke: #cc0000; stroke-width: 4; stroke-linecap: round; }\n";
-  css += ".backflush-config { margin: 30px 0; padding: 20px; background-color: #f5f5f5; border-radius: 10px; }\n";
-  css += ".backflush-config h2 { margin-top: 0; }\n";
-  css += ".form-group { margin-bottom: 15px; }\n";
-  css += "label { display: inline-block; width: 120px; text-align: right; margin-right: 10px; }\n";
-  css += "input[type=number] { width: 80px; padding: 5px; }\n";
-  css += "button { background-color: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }\n";
-  css += "button:hover { background-color: #45a049; }\n";
-  css += ".status { margin-top: 10px; font-weight: bold; }\n";
-  css += ".active { color: #F44336; }\n";
-  css += ".navigation { margin: 20px 0; }\n";
-  css += ".navigation a { margin-right: 15px; }\n";
-  
-  // Additional styles for pressure history page
-  css += "h1, h2 { color: #0066cc; }\n";
-  css += "a { color: #0066cc; text-decoration: none; }\n";
-  css += "a:hover { text-decoration: underline; }\n";
-  css += "table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n";
-  css += "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n";
-  css += "th { background-color: #f2f2f2; }\n";
-  css += "tr:nth-child(even) { background-color: #f9f9f9; }\n";
+  String css = R"CSS(
+    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .pressure-display { font-size: 48px; margin: 20px 0; }
+    .info { font-size: 14px; color: #666; margin-top: 40px; }
+    .gauge-container { width: 250px; height: 250px; margin: 20px auto; position: relative; }
+    .gauge-bg { fill: #f0f0f0; }
+    .gauge-dial { fill: none; stroke-width: 10; stroke-linecap: round; }
+    .gauge-value-text { font-family: Arial; font-size: 24px; font-weight: bold; text-anchor: middle; }
+    .gauge-label { font-family: Arial; font-size: 12px; text-anchor: middle; }
+    .gauge-tick { stroke: #333; stroke-width: 1; }
+    .gauge-tick-label { font-family: Arial; font-size: 10px; text-anchor: middle; }
+    .gauge-pointer { stroke: #cc0000; stroke-width: 4; stroke-linecap: round; }
+    .backflush-config { margin: 30px 0; padding: 20px; background-color: #f5f5f5; border-radius: 10px; }
+    .backflush-config h2 { margin-top: 0; }
+    .form-group { margin-bottom: 15px; }
+    label { display: inline-block; width: 120px; text-align: right; margin-right: 10px; }
+    input[type=number] { width: 80px; padding: 5px; }
+    button { background-color: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+    .status { margin-top: 10px; font-weight: bold; }
+    .active { color: #F44336; }
+    .navigation { margin: 20px 0; }
+    .navigation a { margin-right: 15px; }
+    h1, h2 { color: #0066cc; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+  )CSS";
   
   server.send(200, "text/css", css);
 }
 
 void WebServer::handleJavaScript() {
   Serial.println("Serving JavaScript");
-  String js = "function saveConfig() {\n";
-  js += "  const threshold = document.getElementById('threshold').value;\n";
-  js += "  const duration = document.getElementById('duration').value;\n";
-  js += "  const status = document.getElementById('configStatus');\n";
-  js += "  \n";
-  js += "  fetch('/backflush', {\n";
-  js += "    method: 'POST',\n";
-  js += "    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
-  js += "    body: 'threshold=' + threshold + '&duration=' + duration\n";
-  js += "  })\n";
-  js += "  .then(response => response.text())\n";
-  js += "  .then(data => {\n";
-  js += "    status.textContent = data;\n";
-  js += "    status.style.color = 'green';\n";
-  js += "    setTimeout(() => { status.textContent = ''; }, 3000);\n";
-  js += "  })\n";
-  js += "  .catch(error => {\n";
-  js += "    status.textContent = 'Error: ' + error;\n";
-  js += "    status.style.color = 'red';\n";
-  js += "  });\n";
-  js += "}\n";
-  
-  js += "function updateTimeDisplay() {\n";
-  js += "  var xhr = new XMLHttpRequest();\n";
-  js += "  xhr.onreadystatechange = function() {\n";
-  js += "    if (xhr.readyState == 4 && xhr.status == 200) {\n";
-  js += "      var data = JSON.parse(xhr.responseText);\n";
-  js += "      var pressure = data.pressure;\n";
-  js += "      var pressureElement = document.getElementById('pressure-display');\n";
-  js += "      if (pressureElement) pressureElement.textContent = pressure.toFixed(1) + ' bar';\n";
-  js += "      // Update gauge needle position\n";
-  js += "      var needle = document.getElementById('gauge-needle');\n";
-  js += "      if (needle) {\n";
-  js += "        var startAngle = -225; // -225 degrees\n";
-  js += "        var endAngle = 45;     // 45 degrees\n";
-  js += "        var maxPressure = " + String(PRESSURE_MAX) + ";\n";
-  js += "        var percentage = (pressure / maxPressure);\n";
-  js += "        var angle = startAngle + (percentage * (endAngle - startAngle));\n";
-  js += "        var pointerRadians = angle * Math.PI / 180;\n";
-  js += "        var pointerX = 125 + 90 * Math.cos(pointerRadians);\n";
-  js += "        var pointerY = 125 + 90 * Math.sin(pointerRadians);\n";
-  js += "        needle.setAttribute('x2', pointerX);\n";
-  js += "        needle.setAttribute('y2', pointerY);\n";
-  js += "      }\n";
-  js += "      // Update current time if available\n";
-  js += "      if (data.datetime) {\n";
-  js += "        var timeElement = document.getElementById('current-time');\n";
-  js += "        if (timeElement) timeElement.textContent = data.datetime;\n";
-  js += "      }\n";
-  js += "      // Update uptime\n";
-  js += "      var uptimeElement = document.getElementById('uptime');\n";
-  js += "      if (uptimeElement && data.timestamp) {\n";
-  js += "        var seconds = data.timestamp;\n";
-  js += "        var days = Math.floor(seconds / 86400);\n";
-  js += "        seconds %= 86400;\n";
-  js += "        var hours = Math.floor(seconds / 3600);\n";
-  js += "        seconds %= 3600;\n";
-  js += "        var minutes = Math.floor(seconds / 60);\n";
-  js += "        seconds %= 60;\n";
-  js += "        var uptimeStr = '';\n";
-  js += "        if (days > 0) uptimeStr += days + 'd ';\n";
-  js += "        if (hours > 0 || days > 0) uptimeStr += hours + 'h ';\n";
-  js += "        if (minutes > 0 || hours > 0 || days > 0) uptimeStr += minutes + 'm ';\n";
-  js += "        uptimeStr += seconds + 's';\n";
-  js += "        uptimeElement.textContent = uptimeStr;\n";
-  js += "      }\n";
-  js += "      // Update backflush threshold\n";
-  js += "      var thresholdElement = document.getElementById('backflush-threshold');\n";
-  js += "      if (thresholdElement && data.backflush_threshold) {\n";
-  js += "        thresholdElement.textContent = parseFloat(data.backflush_threshold).toFixed(1);\n";
-  js += "      }\n";
-  js += "      // Update backflush sections visibility based on active state\n";
-  js += "      var activeSection = document.getElementById('backflush-active-section');\n";
-  js += "      var inactiveSection = document.getElementById('backflush-inactive-section');\n";
-  js += "      if (activeSection && inactiveSection) {\n";
-  js += "        if (data.backflush_active === true) {\n";
-  js += "          activeSection.style.display = 'block';\n";
-  js += "          inactiveSection.style.display = 'none';\n";
-  js += "          // Update the status text\n";
-  js += "          var statusElement = document.getElementById('backflush-status');\n";
-  js += "          if (statusElement && data.backflush_elapsed !== undefined) {\n";
-  js += "            statusElement.textContent = data.backflush_elapsed + '/' + data.backflush_duration + ' seconds';\n";
-  js += "          }\n";
-  js += "        } else {\n";
-  js += "          activeSection.style.display = 'none';\n";
-  js += "          inactiveSection.style.display = 'block';\n";
-  js += "        }\n";
-  js += "      }\n";
-  js += "    }\n";
-  js += "  };\n";
-  js += "  xhr.open('GET', '/api', true);\n";
-  js += "  xhr.send();\n";
-  js += "}\n";
-  
-  js += "// Update time display every 1 second\n";
-  js += "window.onload = function() {\n";
-  js += "  updateTimeDisplay();\n";
-  js += "  setInterval(updateTimeDisplay, 1000);\n";
-  js += "};\n";
+  String js = R"JS(
+    function saveConfig() {
+      const threshold = document.getElementById('threshold').value;
+      const duration = document.getElementById('duration').value;
+      const status = document.getElementById('configStatus');
+      
+      fetch('/backflush', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'threshold=' + threshold + '&duration=' + duration
+      })
+      .then(response => response.text())
+      .then(data => {
+        status.textContent = data;
+        status.style.color = 'green';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      })
+      .catch(error => {
+        status.textContent = 'Error: ' + error;
+        status.style.color = 'red';
+      });
+    }
+
+    function updateTimeDisplay() {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          var data = JSON.parse(xhr.responseText);
+          var pressure = data.pressure;
+          var pressureElement = document.getElementById('pressure-display');
+          if (pressureElement) pressureElement.textContent = pressure.toFixed(1) + ' bar';
+          // Update gauge needle position
+          var needle = document.getElementById('gauge-needle');
+          if (needle) {
+            var startAngle = -225; // -225 degrees
+            var endAngle = 45;     // 45 degrees
+            var maxPressure = )JS" + String(PRESSURE_MAX) + R"JS(;
+            var percentage = (pressure / maxPressure);
+            var angle = startAngle + (percentage * (endAngle - startAngle));
+            var pointerRadians = angle * Math.PI / 180;
+            var pointerX = 125 + 90 * Math.cos(pointerRadians);
+            var pointerY = 125 + 90 * Math.sin(pointerRadians);
+            needle.setAttribute('x2', pointerX);
+            needle.setAttribute('y2', pointerY);
+          }
+          // Update current time if available
+          if (data.datetime) {
+            var timeElement = document.getElementById('current-time');
+            if (timeElement) timeElement.textContent = data.datetime;
+          }
+          // Update uptime
+          var uptimeElement = document.getElementById('uptime');
+          if (uptimeElement && data.timestamp) {
+            var seconds = data.timestamp;
+            var days = Math.floor(seconds / 86400);
+            seconds %= 86400;
+            var hours = Math.floor(seconds / 3600);
+            seconds %= 3600;
+            var minutes = Math.floor(seconds / 60);
+            seconds %= 60;
+            var uptimeStr = '';
+            if (days > 0) uptimeStr += days + 'd ';
+            if (hours > 0 || days > 0) uptimeStr += hours + 'h ';
+            if (minutes > 0 || hours > 0 || days > 0) uptimeStr += minutes + 'm ';
+            uptimeStr += seconds + 's';
+            uptimeElement.textContent = uptimeStr;
+          }
+          // Update backflush threshold
+          var thresholdElement = document.getElementById('backflush-threshold');
+          if (thresholdElement && data.backflush_threshold) {
+            thresholdElement.textContent = parseFloat(data.backflush_threshold).toFixed(1);
+          }
+          // Update backflush sections visibility based on active state
+          var activeSection = document.getElementById('backflush-active-section');
+          var inactiveSection = document.getElementById('backflush-inactive-section');
+          if (activeSection && inactiveSection) {
+            if (data.backflush_active === true) {
+              activeSection.style.display = 'block';
+              inactiveSection.style.display = 'none';
+              // Update the status text
+              var statusElement = document.getElementById('backflush-status');
+              if (statusElement && data.backflush_elapsed !== undefined) {
+                statusElement.textContent = data.backflush_elapsed + '/' + data.backflush_duration + ' seconds';
+              }
+            } else {
+              activeSection.style.display = 'none';
+              inactiveSection.style.display = 'block';
+            }
+          }
+        }
+      };
+      xhr.open('GET', '/api', true);
+      xhr.send();
+    }
+
+    // Update time display every 1 second
+    window.onload = function() {
+      updateTimeDisplay();
+      setInterval(updateTimeDisplay, 1000);
+    };
+  )JS";
   
   server.send(200, "application/javascript", js);
 }

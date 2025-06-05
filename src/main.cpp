@@ -219,6 +219,8 @@ void loop() {
     settings->setBackflushDuration(backflushDuration);
     backflushConfigChanged = false;
   }
+
+  delay(50);
 }
 
 float readPressure() {
