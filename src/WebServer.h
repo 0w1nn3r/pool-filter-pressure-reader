@@ -54,7 +54,6 @@ private:
     void handleRoot();
     void handleAPI();
     void handleCSS();
-    void handleJavaScript();
     void handleBackflushConfig();
     void handleBackflushLog();
     void handleClearLog();

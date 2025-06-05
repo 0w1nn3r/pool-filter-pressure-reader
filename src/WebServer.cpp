@@ -3,6 +3,7 @@
 extern "C" {
   #include "user_interface.h"
 #include <StreamString.h>
+#include <functional>
 }
 
 // Pressure sensor calibration
@@ -96,7 +97,6 @@ void WebServer::begin() {
     server.on("/", [this]() { handleRoot(); });
     server.on("/api", [this]() { handleAPI(); });
     server.on("/style.css", [this]() { handleCSS(); });
-    server.on("/script.js", [this]() { handleJavaScript(); });
     server.on("/backflush", [this]() { handleBackflushConfig(); });
     server.on("/log", [this]() { handleBackflushLog(); });
     server.on("/clearlog", [this]() { handleClearLog(); });
@@ -221,115 +221,6 @@ void WebServer::handleCSS() {
   server.send(200, "text/css", css);
 }
 
-void WebServer::handleJavaScript() {
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  String js = R"JS(
-    function saveConfig() {
-      const threshold = document.getElementById('threshold').value;
-      const duration = document.getElementById('duration').value;
-      const status = document.getElementById('configStatus');
-      
-      fetch('/backflush', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'threshold=' + threshold + '&duration=' + duration
-      })
-      .then(response => response.text())
-      .then(data => {
-        status.textContent = data;
-        status.style.color = 'green';
-        setTimeout(() => { status.textContent = ''; }, 3000);
-      })
-      .catch(error => {
-        status.textContent = 'Error: ' + error;
-        status.style.color = 'red';
-      });
-    }
-
-    function updateTimeDisplay() {
-      var xhr = new XMLHttpRequest();
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState == 4 && xhr.status == 200) {
-          var data = JSON.parse(xhr.responseText);
-          var pressure = data.pressure;
-          var pressureElement = document.getElementById('pressure-display');
-          if (pressureElement) pressureElement.textContent = pressure.toFixed(1) + ' bar';
-          // Update gauge needle position
-          var needle = document.getElementById('gauge-needle');
-          if (needle) {
-            var startAngle = -225; // -225 degrees
-            var endAngle = 45;     // 45 degrees )JS";
-  server.send(200, "application/javascript", js);
-  server.sendContent("var maxPressure = " + String(PRESSURE_MAX));
-  js = R"JS(;
-            var percentage = (pressure / maxPressure);
-            var angle = startAngle + (percentage * (endAngle - startAngle));
-            var pointerRadians = angle * Math.PI / 180;
-            var pointerX = 125 + 90 * Math.cos(pointerRadians);
-            var pointerY = 125 + 90 * Math.sin(pointerRadians);
-            needle.setAttribute('x2', pointerX);
-            needle.setAttribute('y2', pointerY);
-          }
-          // Update current time if available
-          if (data.datetime) {
-            var timeElement = document.getElementById('current-time');
-            if (timeElement) timeElement.textContent = data.datetime;
-          }
-          // Update uptime
-          var uptimeElement = document.getElementById('uptime');
-          if (uptimeElement && data.timestamp) {
-            var seconds = data.timestamp;
-            var days = Math.floor(seconds / 86400);
-            seconds %= 86400;
-            var hours = Math.floor(seconds / 3600);
-            seconds %= 3600;
-            var minutes = Math.floor(seconds / 60);
-            seconds %= 60;
-            var uptimeStr = '';
-            if (days > 0) uptimeStr += days + 'd ';
-            if (hours > 0 || days > 0) uptimeStr += hours + 'h ';
-            if (minutes > 0 || hours > 0 || days > 0) uptimeStr += minutes + 'm ';
-            uptimeStr += seconds + 's';
-            uptimeElement.textContent = uptimeStr;
-          }
-          // Update backflush threshold
-          var thresholdElement = document.getElementById('backflush-threshold');
-          if (thresholdElement && data.backflush_threshold) {
-            thresholdElement.textContent = parseFloat(data.backflush_threshold).toFixed(1);
-          }
-          // Update backflush sections visibility based on active state
-          var activeSection = document.getElementById('backflush-active-section');
-          var inactiveSection = document.getElementById('backflush-inactive-section');
-          if (activeSection && inactiveSection) {
-            if (data.backflush_active === true) {
-              activeSection.style.display = 'block';
-              inactiveSection.style.display = 'none';
-              // Update the status text
-              var statusElement = document.getElementById('backflush-status');
-              if (statusElement && data.backflush_elapsed !== undefined) {
-                statusElement.textContent = data.backflush_elapsed + '/' + data.backflush_duration + ' seconds';
-              }
-            } else {
-              activeSection.style.display = 'none';
-              inactiveSection.style.display = 'block';
-            }
-          }
-        }
-      };
-      xhr.open('GET', '/api', true);
-      xhr.send();
-    }
-
-    // Update time display every 1 second
-    window.onload = function() {
-      updateTimeDisplay();
-      setInterval(updateTimeDisplay, 1000);
-    };
-  )JS";
-  server.sendContent(js);
-  server.sendContent("");
-}
-
 void WebServer::handleRoot() {
   Serial.println("Client connected: " + server.client().remoteIP().toString());
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
@@ -345,9 +236,10 @@ void WebServer::handleRoot() {
 <body>
   <div class='container'>
     <h1>Pool Filter Pressure Monitor</h1>
-    <div><span id='pressure-display' class='pressure-display'>" + String(currentPressure, 1) + "</span></div>
-  )HTML";
+    <div><span id='pressure-display' class='pressure-display'>)HTML";
   server.send(200, "text/html", html);
+  server.sendContent(String(currentPressure, 1) + "</span></div>");
+  
   
   // Calculate gauge rotation angle based on pressure
   float percentage = (currentPressure / PRESSURE_MAX) * 100;
@@ -435,17 +327,14 @@ void WebServer::handleRoot() {
   html += "    </div>";
   
   // Backflush inactive section - initially visible or hidden based on current state
-  html += R"HTML(
-    <div id='backflush-inactive-section' style='" + String(backflushActive ? "display:none;" : "display:block;") + "'>
-      <p>Backflush threshold: <span id='backflush-threshold'>" + String(backflushThreshold, 1) + "</span> bar</p>
-      <form method='POST' action='/manualbackflush' onsubmit='return confirm(\"Start backflush now?\");'>
-        <button type='submit' class='button' style='background-color: #4CAF50; margin-top: 10px;'>Backflush Now</button>
-      </form>
-    </div>
-  )HTML";
+  html += "<div id='backflush-inactive-section' style='" + String(backflushActive ? "display:none;" : "display:block;") + "'>";
+  html += "<p>Backflush threshold: <span id='backflush-threshold'>" + String(backflushThreshold, 1) + "</span> bar</p>";
+  html += "<form method='POST' action='/manualbackflush' onsubmit='return confirm(\"Start backflush now?\");'>";
+  html += "<button type='submit' class='button' style='background-color: #4CAF50; margin-top: 10px;'>Backflush Now</button></form></div>";
+  server.sendContent(html);
 
   // Add navigation links
-  html += R"HTML(
+  html = R"HTML(
     <div class='navigation'>
       <p>
         <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>
@@ -463,17 +352,22 @@ void WebServer::handleRoot() {
       <form id='backflushForm'>
         <div class='form-group'>
           <label for='threshold'>Threshold (bar):</label>
-          <input type='number' id='threshold' name='threshold' min='0.3' max='" + String(PRESSURE_MAX) + "' step='0.1' value='" + String(backflushThreshold, 1) + "'>
+          <input type='number' id='threshold' name='threshold' min='0.3' max=')HTML"; 
+  server.sendContent(html);
+  server.sendContent(String(PRESSURE_MAX) + "' step='0.1' value='" + String(backflushThreshold, 1));
+  html = R"HTML('>
         </div>
         <div class='form-group'>
           <label for='duration'>Duration (sec):</label>
-          <input type='number' id='duration' name='duration' min='5' max='300' step='1' value='" + String(backflushDuration) + "'>
+          <input type='number' id='duration' name='duration' min='5' max='300' step='1' value=')HTML"
+    +String(backflushDuration) + 
+    R"HTML2('>
         </div>
         <button type='button' onclick='saveConfig()'>Save Configuration</button>
         <p id='configStatus'></p>
       </form>
     </div>
-  )HTML";
+  )HTML2";
   
   server.sendContent(html);
 
@@ -490,13 +384,119 @@ void WebServer::handleRoot() {
   }
   html += "    <p>" + String(ESP.getFreeHeap()) + " bytes free</div>\n";
   html += "  </div>\n";
-  
-  // Add script reference
-  html += "  <script src=\"/script.js\"></script>\n";
-  html += "</body>\n";
-  html += "</html>";
-  
   server.sendContent(html);
+  
+  // Add javascript
+  html = R"HTML(<script>
+    function saveConfig() {
+      const threshold = document.getElementById('threshold').value;
+      const duration = document.getElementById('duration').value;
+      const status = document.getElementById('configStatus');
+      
+      fetch('/backflush', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'threshold=' + threshold + '&duration=' + duration
+      })
+      .then(response => response.text())
+      .then(data => {
+        status.textContent = data;
+        status.style.color = 'green';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      })
+      .catch(error => {
+        status.textContent = 'Error: ' + error;
+        status.style.color = 'red';
+      });
+})HTML";
+server.sendContent(html);
+
+html = R"HTML(
+    function updateTimeDisplay() {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          var data = JSON.parse(xhr.responseText);
+          var pressure = data.pressure;
+          var pressureElement = document.getElementById('pressure-display');
+          if (pressureElement) pressureElement.textContent = pressure.toFixed(1) + ' bar';
+          // Update gauge needle position
+          var needle = document.getElementById('gauge-needle');
+          if (needle) {
+            var startAngle = -225; // -225 degrees
+            var endAngle = 45;     // 45 degrees )HTML";
+  html += ("var maxPressure = " + String(PRESSURE_MAX));
+  server.sendContent(html);
+  html = R"HTML(;
+            var percentage = (pressure / maxPressure);
+            var angle = startAngle + (percentage * (endAngle - startAngle));
+            var pointerRadians = angle * Math.PI / 180;
+            var pointerX = 125 + 90 * Math.cos(pointerRadians);
+            var pointerY = 125 + 90 * Math.sin(pointerRadians);
+            needle.setAttribute('x2', pointerX);
+            needle.setAttribute('y2', pointerY);
+          }
+          // Update current time if available
+          if (data.datetime) {
+            var timeElement = document.getElementById('current-time');
+            if (timeElement) timeElement.textContent = data.datetime;
+          }
+          // Update uptime
+          var uptimeElement = document.getElementById('uptime');
+          if (uptimeElement && data.timestamp) {
+            var seconds = data.timestamp;
+            var days = Math.floor(seconds / 86400);
+            seconds %= 86400;
+            var hours = Math.floor(seconds / 3600);
+            seconds %= 3600;
+            var minutes = Math.floor(seconds / 60);
+            seconds %= 60;
+            var uptimeStr = '';
+            if (days > 0) uptimeStr += days + 'd ';
+            if (hours > 0 || days > 0) uptimeStr += hours + 'h ';
+            if (minutes > 0 || hours > 0 || days > 0) uptimeStr += minutes + 'm ';
+            uptimeStr += seconds + 's';
+            uptimeElement.textContent = uptimeStr;
+          }
+)HTML";
+          server.sendContent(html);
+          html = R"HTML(
+          // Update backflush threshold
+          var thresholdElement = document.getElementById('backflush-threshold');
+          if (thresholdElement && data.backflush_threshold) {
+            thresholdElement.textContent = parseFloat(data.backflush_threshold).toFixed(1);
+          }
+          // Update backflush sections visibility based on active state
+          var activeSection = document.getElementById('backflush-active-section');
+          var inactiveSection = document.getElementById('backflush-inactive-section');
+          if (activeSection && inactiveSection) {
+            if (data.backflush_active === true) {
+              activeSection.style.display = 'block';
+              inactiveSection.style.display = 'none';
+              // Update the status text
+              var statusElement = document.getElementById('backflush-status');
+              if (statusElement && data.backflush_elapsed !== undefined) {
+                statusElement.textContent = data.backflush_elapsed + '/' + data.backflush_duration + ' seconds';
+              }
+            } else {
+              activeSection.style.display = 'none';
+              inactiveSection.style.display = 'block';
+            }
+          }
+        }
+      };
+      xhr.open('GET', '/api', true);
+      xhr.send();
+    }
+
+    // Update time display every 1 second
+    window.onload = function() {
+      updateTimeDisplay();
+      setInterval(updateTimeDisplay, 1000);
+    };
+  )HTML";
+  server.sendContent(html);
+  server.sendContent("</body></html>");
   server.sendContent("");
 }
 
