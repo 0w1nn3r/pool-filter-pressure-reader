@@ -42,7 +42,6 @@ public:
     
     // Get readings for web display
     String getReadingsAsJson();
-    String getReadingsAsHtml();
     
     // Clear all readings
     bool clearReadings();

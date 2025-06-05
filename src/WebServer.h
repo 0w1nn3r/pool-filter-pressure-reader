@@ -37,13 +37,14 @@ private:
     TimeManager& timeManager;
     BackflushLogger& backflushLogger;
     Settings& settings;
-    PressureLogger& pressureLogger;
     
     // OTA update variables
     unsigned long otaEnabledTime;
-    bool otaEnabled;
+    bool otaEnabled = false;
     static const unsigned long OTA_TIMEOUT = 300000; // 5 minutes in milliseconds
     
+    PressureLogger& pressureLogger;
+ 
     // Display reference for OTA updates
     Display* display;
 
