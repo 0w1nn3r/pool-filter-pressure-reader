@@ -156,29 +156,10 @@ void WebServer::handleOTAUpdate() {
     Serial.println(WiFi.localIP());
     
     String html = F(R"HTML(
-<!DOCTYPE html>
-<html>
-<head>
-  <title>OTA Update</title>
-  <meta name='viewport' content='width=device-width, initial-scale=1'>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; text-align: center; }
-    h1 { color: #4CAF50; }
-    a { display: inline-block; background: #4CAF50; color: white; padding: 10px 20px;
-        text-decoration: none; border-radius: 5px; margin-top: 20px; }
-    a.back { background: #2196F3; }
-    .memory { font-size: 10px; color: #666; margin-top: 20px; }
-  </style>
-</head>
-<body>
-  <h1>OTA Update Mode Enabled</h1>
-  <p>OTA updates enabled for 5 minutes.</p>
-  <p>You can now upload firmware using the Arduino IDE or PlatformIO.</p>
-  <p>Or use the web uploader:</p>
-  <a href='/otaupload'>Web Firmware Uploader</a>
-  <p><a href='/' class='back'>Back to Home</a></p>
-</body>
-</html>
+OTA Update Mode Enabled
+OTA updates enabled for 5 minutes.
+You can now upload firmware using the Arduino IDE or PlatformIO.
+Or use the web uploader:
 )HTML");
     
     server.send(200, "text/html", html);
@@ -231,15 +212,182 @@ void WebServer::handleRoot() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pool Filter Pressure Monitor</title>
   <link rel="stylesheet" href="/style.css">
-</head>
-<body>
+</head>)HTML";
+server.send(200, "text/html", html);
+  
+  // Add javascript
+  html = F(R"HTML(<script>
+    function saveConfig() {
+      const threshold = document.getElementById('threshold').value;
+      const duration = document.getElementById('duration').value;
+      const status = document.getElementById('configStatus');
+      
+      fetch('/backflush', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'threshold=' + threshold + '&duration=' + duration
+      })
+      .then(response => response.text())
+      .then(data => {
+        status.textContent = data;
+        status.style.color = 'green';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      })
+      .catch(error => {
+        status.textContent = 'Error: ' + error;
+        status.style.color = 'red';
+      });
+})HTML");
+server.sendContent(html);
+html = F(R"HTML(
+  function updateTimeDisplay() {
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState == 4 && xhr.status == 200) {
+        var data = JSON.parse(xhr.responseText);
+        var pressure = data.pressure;
+        var pressureElement = document.getElementById('pressure-display');
+        if (pressureElement) pressureElement.textContent = pressure.toFixed(1) + ' bar';
+        // Update gauge needle position
+        var needle = document.getElementById('gauge-needle');
+        if (needle) {
+          var startAngle = -225; // -225 degrees
+          var endAngle = 45;     // 45 degrees 
+          )HTML");
+server.sendContent(html);
+server.sendContent("var maxPressure = " + String(PRESSURE_MAX));
+html = F(R"HTML(
+          var percentage = (pressure / maxPressure);
+          var angle = startAngle + (percentage * (endAngle - startAngle));
+          var pointerRadians = angle * Math.PI / 180;
+          var pointerX = 125 + 90 * Math.cos(pointerRadians);
+          var pointerY = 125 + 90 * Math.sin(pointerRadians);
+          needle.setAttribute('x2', pointerX);
+          needle.setAttribute('y2', pointerY);
+        }
+        // Update current time if available
+        if (data.datetime) {
+          var timeElement = document.getElementById('current-time');
+          if (timeElement) timeElement.textContent = data.datetime;
+        }
+        // Update uptime
+        var uptimeElement = document.getElementById('uptime');
+        if (uptimeElement && data.uptime) {
+          var seconds = data.uptime;
+          var days = Math.floor(seconds / 86400);
+          seconds %= 86400;
+          var hours = Math.floor(seconds / 3600);
+          seconds %= 3600;
+          var minutes = Math.floor(seconds / 60);
+          seconds %= 60;
+          var uptimeStr = '';
+          if (days > 0) uptimeStr += days + 'd ';
+          if (hours > 0 || days > 0) uptimeStr += hours + 'h ';
+          if (minutes > 0 || hours > 0 || days > 0) uptimeStr += minutes + 'm ';
+          uptimeStr += seconds + 's';
+          uptimeElement.textContent = uptimeStr;
+        }
+)HTML");
+        server.sendContent(html);
+        html = F(R"HTML(
+          // Update backflush threshold
+          var thresholdElement = document.getElementById('backflush-threshold');
+          if (thresholdElement && data.backflush_threshold) {
+            var newThreshold = parseFloat(data.backflush_threshold);
+            thresholdElement.textContent = newThreshold.toFixed(1);
+            // Update the colored arcs when threshold changes
+            updateGaugeArcs(newThreshold);
+          }
+          // Update backflush sections visibility based on active state
+          var activeSection = document.getElementById('backflush-active-section');
+          var inactiveSection = document.getElementById('backflush-inactive-section');
+          if (activeSection && inactiveSection) {
+            if (data.backflush_active === true) {
+              activeSection.style.display = 'block';
+            inactiveSection.style.display = 'none';
+            // Update the status text
+            var statusElement = document.getElementById('backflush-status');
+            if (statusElement && data.backflush_elapsed !== undefined) {
+              statusElement.textContent = data.backflush_elapsed + '/' + data.backflush_duration + ' seconds';
+            }
+          } else {
+            activeSection.style.display = 'none';
+            inactiveSection.style.display = 'block';
+          }
+        }
+      }
+    };
+    xhr.open('GET', '/api', true);
+    xhr.send();
+  }
+    
+// Function to update the colored arcs based on threshold
+function updateGaugeArcs(threshold) {
+  var maxPressure = parseFloat(document.getElementById('max-pressure-value').textContent);
+  var startAngle = 135.0;
+  var endAngle = 405.0;
+  
+  // Calculate threshold percentages
+  var thresholdPercentage = (threshold / maxPressure) * 100;
+  var thresholdPlusMarginPercentage = ((threshold + 0.2) / maxPressure) * 100;
+  
+  // Calculate angles for the colored segments
+  var thresholdAngle = startAngle + (thresholdPercentage / 100) * 270.0;
+  var thresholdPlusMarginAngle = startAngle + (thresholdPlusMarginPercentage / 100) * 270.0;
+  
+  // Convert to radians for SVG path calculations
+  var greenStartAngle = startAngle * (Math.PI / 180);
+  var greenEndAngle = thresholdAngle * (Math.PI / 180);
+  var orangeStartAngle = thresholdAngle * (Math.PI / 180);
+  var orangeEndAngle = thresholdPlusMarginAngle * (Math.PI / 180);
+  var redStartAngle = thresholdPlusMarginAngle * (Math.PI / 180);
+  var redEndAngle = endAngle * (Math.PI / 180);
+  
+  // Update the SVG paths
+  updateArcSegment('green-arc', 125, 125, 105, greenStartAngle, greenEndAngle, '#4CAF50', 0.2);
+  updateArcSegment('orange-arc', 125, 125, 105, orangeStartAngle, orangeEndAngle, '#FF9800', 0.2);
+  updateArcSegment('red-arc', 125, 125, 105, redStartAngle, redEndAngle, '#F44336', 0.2);
+}
+
+// Helper function to update an arc segment in the SVG
+function updateArcSegment(id, cx, cy, radius, startAngle, endAngle, color, opacity) {
+  // Calculate start and end points of the arc
+  var startX = cx + radius * Math.cos(startAngle);
+  var startY = cy + radius * Math.sin(startAngle);
+  var endX = cx + radius * Math.cos(endAngle);
+  var endY = cy + radius * Math.sin(endAngle);
+  
+  // Determine if the arc is larger than 180 degrees (π radians)
+  var largeArcFlag = (endAngle - startAngle > Math.PI) ? 1 : 0;
+  
+  // Create the SVG path for the arc
+  var path = 'M ' + cx + ',' + cy + ' L ' + 
+            startX + ',' + startY + ' A ' + 
+            radius + ' ' + radius + ' 0 ' + 
+            largeArcFlag + ' 1 ' + 
+            endX + ',' + endY + ' Z';
+  
+  // Update the existing path element
+  var arcElement = document.getElementById(id);
+  if (arcElement) {
+    arcElement.setAttribute('d', path);
+  }
+}
+
+  // Update time display every 1 second
+  window.onload = function() {
+    updateTimeDisplay();
+    setInterval(updateTimeDisplay, 1000);
+  };
+</script>)HTML");
+server.sendContent(html);
+
+html = R"HTML(<body>
   <div class='container'>
     <h1>Pool Filter Pressure Monitor</h1>
     <div><span id='pressure-display' class='pressure-display'>)HTML";
-  server.send(200, "text/html", html);
-  server.sendContent(String(currentPressure, 1) + "</span></div>");
-  
-  
+  server.sendContent(html+String(currentPressure, 1) + "</span></div>");
+
   // Calculate gauge rotation angle based on pressure
   float percentage = (currentPressure / PRESSURE_MAX) * 100;
   
@@ -266,15 +414,21 @@ void WebServer::handleRoot() {
   // Green segment (0 to threshold)
   float greenStartAngle = startAngle * (3.14159 / 180);
   float greenEndAngle = thresholdAngle * (3.14159 / 180);
-  html += drawArcSegment(125, 125, 105, greenStartAngle, greenEndAngle, "#4CAF50", 0.2);
+  String greenArc = drawArcSegment(125, 125, 105, greenStartAngle, greenEndAngle, "#4CAF50", 0.2);
+  html += greenArc.substring(0, 14) + "id='green-arc' " + greenArc.substring(14);
+
   // Orange segment (threshold to threshold+0.2)
   float orangeStartAngle = thresholdAngle * (3.14159 / 180);
   float orangeEndAngle = thresholdPlusMarginAngle * (3.14159 / 180);
-  html += drawArcSegment(125, 125, 105, orangeStartAngle, orangeEndAngle, "#FF9800", 0.2);
+  String orangeArc = drawArcSegment(125, 125, 105, orangeStartAngle, orangeEndAngle, "#FF9800", 0.2);
+  html += orangeArc.substring(0, 14) + "id='orange-arc' " + orangeArc.substring(14);
+
   // Red segment (threshold+0.2 to max)
   float redStartAngle = thresholdPlusMarginAngle * (3.14159 / 180);
   float redEndAngle = endAngle * (3.14159 / 180);
-  html += drawArcSegment(125, 125, 105, redStartAngle, redEndAngle, "#F44336", 0.2);
+  String redArc = drawArcSegment(125, 125, 105, redStartAngle, redEndAngle, "#F44336", 0.2);
+  html += redArc.substring(0, 14) + "id='red-arc' " + redArc.substring(14);
+
   // Draw tick marks and labels
   for (int i = 0; i <= 10; i++) {
     float tickAngle = startAngle + (i * 27); // 270 degrees / 10 = 27 degrees per tick
@@ -295,7 +449,6 @@ void WebServer::handleRoot() {
     float tickValue = (i / 10.0) * PRESSURE_MAX;
     html += "        <text x='" + String(labelX) + "' y='" + String(labelY) + "' class='gauge-tick-label'>" + String(tickValue, 1) + "</text>\n";
   }
-  
   // Draw the pointer
   float pointerRadians = angle * 3.14159 / 180;
   float pointerX = 125 + 90 * cos(pointerRadians);
@@ -303,7 +456,11 @@ void WebServer::handleRoot() {
   
   html += "        <line id='gauge-needle' x1='125' y1='125' x2='" + String(pointerX) + "' y2='" + String(pointerY) + "' class='gauge-pointer' />\n";
   html += "        <circle cx='125' cy='125' r='10' fill='#333' />\n"; // Pointer pivot
+  // Add hidden element to store max pressure value for JavaScript
+  html += "        <text id='max-pressure-value' style='display:none;'>" + String(PRESSURE_MAX) + "</text>\n";
   html += "      </svg>\n";
+  
+  // SVG closing tag is now moved above
   html += "    </div>\n";
 
   server.sendContent(html);
@@ -381,122 +538,14 @@ void WebServer::handleRoot() {
   html += "  </div>\n";
   server.sendContent(html);
   
-  // Add javascript
-  html = F(R"HTML(<script>
-    function saveConfig() {
-      const threshold = document.getElementById('threshold').value;
-      const duration = document.getElementById('duration').value;
-      const status = document.getElementById('configStatus');
-      
-      fetch('/backflush', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'threshold=' + threshold + '&duration=' + duration
-      })
-      .then(response => response.text())
-      .then(data => {
-        status.textContent = data;
-        status.style.color = 'green';
-        setTimeout(() => { status.textContent = ''; }, 3000);
-      })
-      .catch(error => {
-        status.textContent = 'Error: ' + error;
-        status.style.color = 'red';
-      });
-})HTML");
-server.sendContent(html);
+  
 
-html = F(R"HTML(
-    function updateTimeDisplay() {
-      var xhr = new XMLHttpRequest();
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState == 4 && xhr.status == 200) {
-          var data = JSON.parse(xhr.responseText);
-          var pressure = data.pressure;
-          var pressureElement = document.getElementById('pressure-display');
-          if (pressureElement) pressureElement.textContent = pressure.toFixed(1) + ' bar';
-          // Update gauge needle position
-          var needle = document.getElementById('gauge-needle');
-          if (needle) {
-            var startAngle = -225; // -225 degrees
-            var endAngle = 45;     // 45 degrees )HTML");
-  html += ("var maxPressure = " + String(PRESSURE_MAX));
-  server.sendContent(html);
-  html = F(R"HTML(
-            var percentage = (pressure / maxPressure);
-            var angle = startAngle + (percentage * (endAngle - startAngle));
-            var pointerRadians = angle * Math.PI / 180;
-            var pointerX = 125 + 90 * Math.cos(pointerRadians);
-            var pointerY = 125 + 90 * Math.sin(pointerRadians);
-            needle.setAttribute('x2', pointerX);
-            needle.setAttribute('y2', pointerY);
-          }
-          // Update current time if available
-          if (data.datetime) {
-            var timeElement = document.getElementById('current-time');
-            if (timeElement) timeElement.textContent = data.datetime;
-          }
-          // Update uptime
-          var uptimeElement = document.getElementById('uptime');
-          if (uptimeElement && data.uptime) {
-            var seconds = data.uptime;
-            var days = Math.floor(seconds / 86400);
-            seconds %= 86400;
-            var hours = Math.floor(seconds / 3600);
-            seconds %= 3600;
-            var minutes = Math.floor(seconds / 60);
-            seconds %= 60;
-            var uptimeStr = '';
-            if (days > 0) uptimeStr += days + 'd ';
-            if (hours > 0 || days > 0) uptimeStr += hours + 'h ';
-            if (minutes > 0 || hours > 0 || days > 0) uptimeStr += minutes + 'm ';
-            uptimeStr += seconds + 's';
-            uptimeElement.textContent = uptimeStr;
-          }
-)HTML");
-          server.sendContent(html);
-          html = F(R"HTML(
-          // Update backflush threshold
-          var thresholdElement = document.getElementById('backflush-threshold');
-          if (thresholdElement && data.backflush_threshold) {
-            thresholdElement.textContent = parseFloat(data.backflush_threshold).toFixed(1);
-          }
-          // Update backflush sections visibility based on active state
-          var activeSection = document.getElementById('backflush-active-section');
-          var inactiveSection = document.getElementById('backflush-inactive-section');
-          if (activeSection && inactiveSection) {
-            if (data.backflush_active === true) {
-              activeSection.style.display = 'block';
-              inactiveSection.style.display = 'none';
-              // Update the status text
-              var statusElement = document.getElementById('backflush-status');
-              if (statusElement && data.backflush_elapsed !== undefined) {
-                statusElement.textContent = data.backflush_elapsed + '/' + data.backflush_duration + ' seconds';
-              }
-            } else {
-              activeSection.style.display = 'none';
-              inactiveSection.style.display = 'block';
-            }
-          }
-        }
-      };
-      xhr.open('GET', '/api', true);
-      xhr.send();
-    }
 
-    // Update time display every 1 second
-    window.onload = function() {
-      updateTimeDisplay();
-      setInterval(updateTimeDisplay, 1000);
-    };
-  )HTML");
-  server.sendContent(html);
   server.sendContent("</body></html>");
   server.sendContent("");
 }
 
 void WebServer::handleAPI() {
-  Serial.println("api request");
   String json = "{";
   json += "\"pressure\":" + String(currentPressure, 2) + ",";
   
@@ -610,19 +659,19 @@ void WebServer::handlePressureHistory() {
     String html = F(R"HTML(<!DOCTYPE html>
     <html>
     <head>
-    <meta charset=\"UTF-8\">
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pool Pressure History</title>
     <link rel='stylesheet' href='/style.css'>
     <style>
     #chart-container { width: 100%; height: 300px; margin: 20px 0; }
         .info { font-size: 14px; color: #666; margin-top: 40px; }
     </style>
-    <script src=\"https://cdn.jsdelivr.net/npm/moment@2.29.1/min/moment.min.js\"></script>
-    <script src=\"https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js\"></script>
-    <script src=\"https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@0.1.2/dist/chartjs-adapter-moment.min.js\"></script>
-    <script src=\"https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js\"></script>
-    <script src=\"https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7/dist/chartjs-plugin-zoom.min.js\"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/min/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@0.1.2/dist/chartjs-adapter-moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7/dist/chartjs-plugin-zoom.min.js"></script>
     </head>
     <body>
     <h1>Pool Pressure History</h1>)HTML");
@@ -749,17 +798,17 @@ void WebServer::handlePressureHistory() {
         document.write('<p><strong>Date range:</strong> ' + firstDate.toLocaleString() + ' to ' + lastDate.toLocaleString() + '</p>');
       }
     </script>
-    <div style=\"margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;\">
+    <div style="margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
       <h3>Data Retention Settings</h3>
       <form id=\"retentionForm\">
         <label for=\"retentionDays\">Keep pressure data for: </label>
-        <input type=\"number\" id=\"retentionDays\" name=\"retentionDays\" min=\"1\" max=\"90\" value=\")HTML");
+        <input type=\"number\" id=\"retentionDays\" name=\"retentionDays\" min=\"1\" max=\"90\" value=")HTML");
     server.sendContent(html);    
     server.sendContent(String(settings.getDataRetentionDays()));
-    server.sendContent(F(R"HTML(\" style=\"width: 60px;\"> days
-        <button type=\"button\" onclick=\"saveRetentionSettings()\" style=\"margin-left: 10px;\">Save</button>
+    server.sendContent(F(R"HTML(" style=\"width: 60px;\"> days
+        <button type=\"button\" onclick="saveRetentionSettings()" style=\"margin-left: 10px;\">Save</button>
         <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>
-        <p id=\"retentionStatus\" style=\"font-weight: bold;\"></p>
+        <p id="retentionStatus" style=\"font-weight: bold;\"></p>
       </form>
     </div>
     <script>
