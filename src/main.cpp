@@ -63,6 +63,7 @@ unsigned long backflushStartTime = 0;
 float backflushTriggerPressure = 0.0;  // Store the pressure that triggered the backflush
 bool backflushConfigChanged = false;
 String currentBackflushType = "Auto";  // Track whether the current backflush is Auto or Manual
+bool needManualBackflush = false;
 
 // Function prototypes
 float readPressure();
@@ -188,14 +189,31 @@ void loop() {
   // Read pressure at regular intervals
   unsigned long currentTime = millis();
   if (currentTime - lastReadTime >= readInterval) {
+    bool resetButtonPressed = digitalRead(RESET_BUTTON_PIN) == LOW;
     currentPressure = readPressure();
-    displayManager->updateDisplay();
+    if (!resetButtonPressed) displayManager->updateDisplay();
     lastReadTime = currentTime;
     
     // Record pressure reading if time is initialized
     if (timeManager->isTimeInitialized()) {
       pressureLogger->addReading(currentPressure);
       pressureLogger->update(); // Check if we need to save readings
+    }
+
+    // Handle reset button - power cycle if held for 3 seconds
+    static unsigned long reset_button_pressed_time = 0;
+    if (resetButtonPressed) {
+      if (reset_button_pressed_time == 0) {
+        reset_button_pressed_time = millis();
+      }
+      int remainingSeconds = 3 - ((millis() - reset_button_pressed_time) / 1000);
+      displayManager->showResetCountdown("Hold to restart", remainingSeconds);
+      
+      if (millis() - reset_button_pressed_time >= 3000) {
+        ESP.restart();
+      }
+    } else {
+      reset_button_pressed_time = 0;
     }
   }
   
@@ -208,22 +226,7 @@ void loop() {
     settings->setBackflushDuration(backflushDuration);
     backflushConfigChanged = false;
   }
-
-  // Handle reset button - power cycle if held for 3 seconds
-  static unsigned long reset_button_pressed_time = 0;
-  if (digitalRead(RESET_BUTTON_PIN) == LOW) {
-    if (reset_button_pressed_time == 0) {
-      reset_button_pressed_time = millis();
-    }
-    int remainingSeconds = 3 - ((millis() - reset_button_pressed_time) / 1000);
-    displayManager->showResetCountdown("Hold to restart", remainingSeconds);
-    
-    if (millis() - reset_button_pressed_time >= 3000) {
-      ESP.restart();
-    }
-  } else {
-    reset_button_pressed_time = 0;
-  }
+  
   delay(50);
 }
 
@@ -299,12 +302,12 @@ void setupWiFi() {
 
 void handleBackflush() {
   // Check if backflush should be activated
-  if (!backflushActive && currentPressure >= backflushThreshold) {
+  if (!backflushActive && (currentPressure >= backflushThreshold || needManualBackflush)) {
     // Start backflush
     backflushActive = true;
     backflushStartTime = millis();
     backflushTriggerPressure = currentPressure; // Store the pressure that triggered the backflush
-    currentBackflushType = "Auto";  // Set type to Auto for automatic backflush
+    currentBackflushType = needManualBackflush ? "Manual" : "Auto";  // Set type to Auto for automatic backflush
     digitalWrite(RELAY_PIN, LOW);  // Activate relay
     digitalWrite(LED_PIN, LOW);    // Turn LED ON (inverse logic on NodeMCU)
     backflushLogger->logEvent(backflushTriggerPressure, backflushDuration, currentBackflushType);
@@ -312,6 +315,7 @@ void handleBackflush() {
     Serial.print("Backflush started at pressure: ");
     Serial.print(backflushTriggerPressure, 1);
     Serial.println(" bar");
+    needManualBackflush = false;
   }
   
   // Check if backflush should be stopped

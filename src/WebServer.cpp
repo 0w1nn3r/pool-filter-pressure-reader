@@ -998,6 +998,7 @@ void WebServer::handleWiFiConfigPage() {
     server.sendContent("");
 }
 
+extern bool needManualBackflush;
 void WebServer::handleManualBackflush() {
     // Only process POST requests for security
     if (server.method() != HTTP_POST) {
@@ -1013,12 +1014,7 @@ void WebServer::handleManualBackflush() {
     }
     
     // Start a backflush operation
-    backflushActive = true;
-    backflushStartTime = millis();
-    currentBackflushType = "Manual";  // Set the global backflush type to Manual
-    
-    // Log the manual backflush event with the current pressure
-    backflushLogger.logEvent(currentPressure, backflushDuration, "Manual");
+    needManualBackflush = true;
     
     Serial.print("Manual backflush started at pressure: ");
     Serial.print(currentPressure, 1);
@@ -1040,9 +1036,10 @@ void WebServer::handleStopBackflush() {
     
     // Deactivate backflush
     backflushActive = false;
+    needManualBackflush = false;
     
     // Turn off relay and LED
-    digitalWrite(RELAY_PIN, LOW);  // Deactivate relay
+    digitalWrite(RELAY_PIN, HIGH);  // Deactivate relay
     digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
     Serial.println("Manual backflush stopped");
     
