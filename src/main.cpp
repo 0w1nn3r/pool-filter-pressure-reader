@@ -258,6 +258,7 @@ void setupWiFi() {
   displayManager->showWiFiConnecting();
   
   // Initialize WiFiManager
+  Serial.println("Creating a wifimanager");
   WiFiManager wifiManager;
   
   // Set callback for when entering configuration mode
@@ -268,6 +269,7 @@ void setupWiFi() {
   // Try to connect using saved credentials
   // If connection fails, it will start an access point with the specified name
   // and go into a blocking loop awaiting configuration
+  Serial.println("auto connecting....");
   if (!wifiManager.autoConnect(WIFI_AP_NAME)) {
     Serial.println("Failed to connect and hit timeout");
     

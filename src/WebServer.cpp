@@ -155,7 +155,7 @@ void WebServer::handleOTAUpdate() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
     
-    String html = R"HTML(
+    String html = F(R"HTML(
 <!DOCTYPE html>
 <html>
 <head>
@@ -177,16 +177,15 @@ void WebServer::handleOTAUpdate() {
   <p>Or use the web uploader:</p>
   <a href='/otaupload'>Web Firmware Uploader</a>
   <p><a href='/' class='back'>Back to Home</a></p>
-  <p class='memory'>Free memory: )HTML" + String(ESP.getFreeHeap()) + R"HTML( bytes</p>
 </body>
 </html>
-)HTML";
+)HTML");
     
     server.send(200, "text/html", html);
 }
 
 void WebServer::handleCSS() {
-  String css = R"CSS(
+  String css = F(R"CSS(
     body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; color: #333; }
     .container { max-width: 600px; margin: 0 auto; }
     .pressure-display { font-size: 48px; margin: 20px 0; }
@@ -217,7 +216,7 @@ void WebServer::handleCSS() {
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     th { background-color: #f2f2f2; }
     tr:nth-child(even) { background-color: #f9f9f9; }
-  )CSS";
+  )CSS");
   server.send(200, "text/css", css);
 }
 
@@ -261,26 +260,21 @@ void WebServer::handleRoot() {
   // Create SVG gauge
   html = "    <div class='gauge-container'>\n";
   html += "      <svg width='250' height='250' viewBox='0 0 250 250'>\n";
-  
   // Background circle
   html += "        <circle cx='125' cy='125' r='120' class='gauge-bg' />\n";
-  
   // Draw the colored arcs
   // Green segment (0 to threshold)
   float greenStartAngle = startAngle * (3.14159 / 180);
   float greenEndAngle = thresholdAngle * (3.14159 / 180);
   html += drawArcSegment(125, 125, 105, greenStartAngle, greenEndAngle, "#4CAF50", 0.2);
-  
   // Orange segment (threshold to threshold+0.2)
   float orangeStartAngle = thresholdAngle * (3.14159 / 180);
   float orangeEndAngle = thresholdPlusMarginAngle * (3.14159 / 180);
   html += drawArcSegment(125, 125, 105, orangeStartAngle, orangeEndAngle, "#FF9800", 0.2);
-  
   // Red segment (threshold+0.2 to max)
   float redStartAngle = thresholdPlusMarginAngle * (3.14159 / 180);
   float redEndAngle = endAngle * (3.14159 / 180);
   html += drawArcSegment(125, 125, 105, redStartAngle, redEndAngle, "#F44336", 0.2);
-  
   // Draw tick marks and labels
   for (int i = 0; i <= 10; i++) {
     float tickAngle = startAngle + (i * 27); // 270 degrees / 10 = 27 degrees per tick
@@ -359,16 +353,17 @@ void WebServer::handleRoot() {
         </div>
         <div class='form-group'>
           <label for='duration'>Duration (sec):</label>
-          <input type='number' id='duration' name='duration' min='5' max='300' step='1' value=')HTML"
-    +String(backflushDuration) + 
-    R"HTML2('>
+          <input type='number' id='duration' name='duration' min='5' max='300' step='1' value=')HTML";
+  server.sendContent(html);
+  server.sendContent(String(backflushDuration));
+  html = 
+    R"HTML('>
         </div>
         <button type='button' onclick='saveConfig()'>Save Configuration</button>
         <p id='configStatus'></p>
       </form>
     </div>
-  )HTML2";
-  
+  )HTML";
   server.sendContent(html);
 
   html = "    <p>API: <a href='/api'>/api</a> (JSON format)</p>\n";
@@ -387,7 +382,7 @@ void WebServer::handleRoot() {
   server.sendContent(html);
   
   // Add javascript
-  html = R"HTML(<script>
+  html = F(R"HTML(<script>
     function saveConfig() {
       const threshold = document.getElementById('threshold').value;
       const duration = document.getElementById('duration').value;
@@ -408,10 +403,10 @@ void WebServer::handleRoot() {
         status.textContent = 'Error: ' + error;
         status.style.color = 'red';
       });
-})HTML";
+})HTML");
 server.sendContent(html);
 
-html = R"HTML(
+html = F(R"HTML(
     function updateTimeDisplay() {
       var xhr = new XMLHttpRequest();
       xhr.onreadystatechange = function() {
@@ -424,10 +419,10 @@ html = R"HTML(
           var needle = document.getElementById('gauge-needle');
           if (needle) {
             var startAngle = -225; // -225 degrees
-            var endAngle = 45;     // 45 degrees )HTML";
+            var endAngle = 45;     // 45 degrees )HTML");
   html += ("var maxPressure = " + String(PRESSURE_MAX));
   server.sendContent(html);
-  html = R"HTML(;
+  html = F(R"HTML(
             var percentage = (pressure / maxPressure);
             var angle = startAngle + (percentage * (endAngle - startAngle));
             var pointerRadians = angle * Math.PI / 180;
@@ -443,8 +438,8 @@ html = R"HTML(
           }
           // Update uptime
           var uptimeElement = document.getElementById('uptime');
-          if (uptimeElement && data.timestamp) {
-            var seconds = data.timestamp;
+          if (uptimeElement && data.uptime) {
+            var seconds = data.uptime;
             var days = Math.floor(seconds / 86400);
             seconds %= 86400;
             var hours = Math.floor(seconds / 3600);
@@ -458,9 +453,9 @@ html = R"HTML(
             uptimeStr += seconds + 's';
             uptimeElement.textContent = uptimeStr;
           }
-)HTML";
+)HTML");
           server.sendContent(html);
-          html = R"HTML(
+          html = F(R"HTML(
           // Update backflush threshold
           var thresholdElement = document.getElementById('backflush-threshold');
           if (thresholdElement && data.backflush_threshold) {
@@ -494,25 +489,24 @@ html = R"HTML(
       updateTimeDisplay();
       setInterval(updateTimeDisplay, 1000);
     };
-  )HTML";
+  )HTML");
   server.sendContent(html);
   server.sendContent("</body></html>");
   server.sendContent("");
 }
 
 void WebServer::handleAPI() {
+  Serial.println("api request");
   String json = "{";
   json += "\"pressure\":" + String(currentPressure, 2) + ",";
- // json += "\"unit\":\"bar\",";
   
   // Use NTP time if available, otherwise use uptime
   if (timeManager.isTimeInitialized()) {
-    json += "\"timestamp\":" + String(millis() / 1000) + ",";
+    json += "\"uptime\":" + String(millis() / 1000) + ",";
     json += "\"datetime\":\"" + timeManager.getFormattedDateTime() + "\",";
   } else {
     json += "\"timestamp\":" + String(millis() / 1000) + ",";
   }
- // json += "\"wifi_strength\":" + String(WiFi.RSSI()) + ",";
   json += "\"backflush_threshold\":" + String(backflushThreshold, 2) + ",";
   json += "\"backflush_duration\":" + String(backflushDuration) + ",";
   json += "\"backflush_active\":" + String(backflushActive ? "true" : "false");
@@ -555,7 +549,7 @@ void WebServer::handleBackflushConfig() {
 
 void WebServer::handleBackflushLog() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  String html = R"HTML(<!DOCTYPE html>
+  String html = F(R"HTML(<!DOCTYPE html>
   <html>
   <head>
     <title>Backflush Event Log</title>
@@ -576,7 +570,7 @@ void WebServer::handleBackflushLog() {
   </head>
   <body>
     <div class='container'>
-      <h1>Backflush Event Log</h1>\n)HTML";
+      <h1>Backflush Event Log</h1>)HTML");
   
   // Add event count
   html += "    <p>Total events: " + String(backflushLogger.getEventCount()) + "</p>\n";
@@ -613,7 +607,7 @@ void WebServer::handleClearLog() {
 
 void WebServer::handlePressureHistory() {
     server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    String html = R"HTML(<!DOCTYPE html>
+    String html = F(R"HTML(<!DOCTYPE html>
     <html>
     <head>
     <meta charset=\"UTF-8\">
@@ -631,7 +625,7 @@ void WebServer::handlePressureHistory() {
     <script src=\"https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7/dist/chartjs-plugin-zoom.min.js\"></script>
     </head>
     <body>
-    <h1>Pool Pressure History</h1>)HTML";
+    <h1>Pool Pressure History</h1>)HTML");
     server.send(200, "text/html", html);
     
     // Add navigation links
@@ -651,16 +645,9 @@ void WebServer::handlePressureHistory() {
     html += "</div>\n";
     server.sendContent(html);
     
-    // Get pressure data as JSON
-    String jsonData = pressureLogger.getReadingsAsJson();
-    
-    // Add current device time to JSON
-    jsonData.remove(jsonData.length() - 1); // Remove the closing brace
-    jsonData += ",\"currentTime\":" + String(timeManager.getCurrentTime()) + "}";
-    
     // Add JavaScript for chart
     server.sendContent("<script>var pressureData = ");
-    server.sendContent(jsonData);
+    server.sendContent(pressureLogger.getReadingsAsJson());
     server.sendContent(";\n");
     
     html = R"HTML(  // Check if we have data
@@ -671,25 +658,18 @@ void WebServer::handlePressureHistory() {
         var chartData = [];
         // Sort data by timestamp
         pressureData.readings.sort(function(a, b) { return a.time - b.time; });
-        // Use device time for filtering
-        var deviceTime = pressureData.currentTime;
-        // Process each reading, filtering out future timestamps
+        // Process each reading
         for (var i = 0; i < pressureData.readings.length; i++) {
           var reading = pressureData.readings[i];
-          // Skip readings with future timestamps
-          if (reading.time > deviceTime) {
-            console.log('Skipping future timestamp: ' + new Date(reading.time * 1000));
-            continue;
-          }
           // Convert UTC timestamp to local time using detected timezone
           var localTime = new Date(reading.time * 1000);
           chartData.push({
             x: localTime,
             y: reading.pressure
-          });
-        }
+          });})HTML";
+    server.sendContent(html);
 
-        // Create the chart
+    html = F(R"HTML(    // Create the chart
         var ctx = document.getElementById('pressure-chart').getContext('2d');
         var chart; // Define chart variable in wider scope for reset button access
         chart = new Chart(ctx, {
@@ -755,44 +735,33 @@ void WebServer::handlePressureHistory() {
           chart.resetZoom();
         });
       }
-    </script>)HTML";
+    </script>)HTML");
     server.sendContent(html);
     
     // Add summary information
-    html = R"HTML(<script>
+    html = F(R"HTML(<script>
       // Display summary information if we have data
       if (pressureData && pressureData.readings && pressureData.readings.length > 0) {
-        // Filter out future timestamps for display
-        var currentGMTTime = Math.floor(Date.now() / 1000);
-        var validReadings = pressureData.readings.filter(function(reading) {
-          return reading.time <= currentGMTTime;
-        });
-        document.write('<p><strong>Total readings:</strong> ' + validReadings.length + ' (valid) / ' + pressureData.readings.length + ' (total)</p>');
-        if (validReadings.length > 0) {
-          // Convert GMT timestamps to local time
-          var firstDate = new Date(validReadings[0].time * 1000);
-          var lastDate = new Date(validReadings[validReadings.length-1].time * 1000);
-        } else {
-          document.write('<p><strong>Warning:</strong> No valid readings with timestamps in the past or present</p>');
-          return;
-        }
+        document.write('<p><strong>Total readings:</strong> ' + pressureData.readings.length + '</p>');
+        // Convert GMT timestamps to local time
+        var firstDate = new Date(pressureData.readings[0].time * 1000);
+        var lastDate = new Date(pressureData.readings[pressureData.readings.length-1].time * 1000);
         document.write('<p><strong>Date range:</strong> ' + firstDate.toLocaleString() + ' to ' + lastDate.toLocaleString() + '</p>');
       }
     </script>
-    
-    // Add data retention configuration form
     <div style=\"margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;\">
       <h3>Data Retention Settings</h3>
       <form id=\"retentionForm\">
         <label for=\"retentionDays\">Keep pressure data for: </label>
-        <input type=\"number\" id=\"retentionDays\" name=\"retentionDays\" min=\"1\" max=\"90\" value=\"" + String(settings.getDataRetentionDays()) + "\" style=\"width: 60px;\"> days
+        <input type=\"number\" id=\"retentionDays\" name=\"retentionDays\" min=\"1\" max=\"90\" value=\")HTML");
+    server.sendContent(html);    
+    server.sendContent(String(settings.getDataRetentionDays()));
+    server.sendContent(F(R"HTML(\" style=\"width: 60px;\"> days
         <button type=\"button\" onclick=\"saveRetentionSettings()\" style=\"margin-left: 10px;\">Save</button>
         <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>
         <p id=\"retentionStatus\" style=\"font-weight: bold;\"></p>
       </form>
     </div>
-    
-    // Add JavaScript for retention form submission
     <script>
       function saveRetentionSettings() {
         const retentionDays = document.getElementById('retentionDays').value;
@@ -814,8 +783,7 @@ void WebServer::handlePressureHistory() {
           status.style.color = 'red';
         });
       }
-    </script>)HTML";
-    server.sendContent(html);
+    </script>)HTML"));
  
     int offsetHours = timeManager.getTimezoneOffset() / 3600;
     html = "<p class='info'>Current time: " + timeManager.getCurrentTimeStr() + " (GMT" + (offsetHours >= 0 ? "+" : "") + String(offsetHours) + ")</p>\n";
@@ -882,7 +850,7 @@ void WebServer::handleWiFiConfigPage() {
     }
 
     server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    String html1 = R"HTML(
+    String html = R"HTML(
 <!DOCTYPE html>
 <html>
 <head>
@@ -904,42 +872,16 @@ void WebServer::handleWiFiConfigPage() {
     <h1>WiFi Settings</h1>
     
     <div class='info'>
-      <p>Current WiFi Network: <strong>)HTML" + WiFi.SSID() + R"HTML(</strong></p>
-      <p>IP Address: )HTML" + WiFi.localIP().toString() + R"HTML(</p>
-      <p>Signal Strength: )HTML" + String(WiFi.RSSI()) + R"HTML( dBm</p>
-    </div>
-    
+      <p>Current WiFi Network: <strong>)HTML"; 
+    server.send(200, "text/html", html);
+    server.sendContent(WiFi.SSID() + "</strong></p><p>IP Address: " + WiFi.localIP().toString());
+    server.sendContent("</p><p>Signal Strength: " + String(WiFi.RSSI()) + " dBm</p>");
+    server.sendContent(R"HTML(</div>
     <h2>Connect to a New Network</h2>
     <form method='POST' action='/wifi'>
       <label for='ssid'>Select Network:</label><br>
       <select name='ssid' id='ssid' style='padding: 8px; margin-bottom: 10px; width: 100%; max-width: 300px;'>
-        <option value=''>-- Scan for networks --</option>)HTML";
-    String html2 = R"HTML(
-      </select><br><br>
-      <label for='manual_ssid'>Or Enter SSID Manually:</label><br>
-      <input type='text' id='manual_ssid' name='manual_ssid' style='padding: 8px; margin-bottom: 10px; width: calc(100% - 18px); max-width: 282px;'><br><br>
-      <label for='password'>Password:</label><br>
-      <input type='password' id='password' name='password' style='padding: 8px; margin-bottom: 20px; width: calc(100% - 18px); max-width: 282px;'><br><br>
-      <button type='submit' name='action' value='connect' class='button' style='background-color: #28a745;'>Connect to WiFi</button>
-    </form><br>
-
-    <h2>Reset Current Settings</h2>
-    <div class='info'>
-      <p>Alternatively, you can reset all WiFi settings.</p>
-      <p>The device will restart in configuration mode, creating a WiFi access point named <strong>PoolFilterAP</strong>.</p>
-      <p>Connect to this network and navigate to <strong>192.168.4.1</strong> to configure your new WiFi settings.</p>
-    </div>
-    <form method='POST' action='/wifi' onsubmit='return confirm("Are you sure you want to reset WiFi settings? The device will restart.");'>
-      <button type='submit' name='action' value='reset' class='button'>Reset WiFi Settings</button>
-    </form>
-    
-    <a href='/' class='back-link'>Back to Home</a>
-  </div>
-</body>
-</html>
-)HTML";
-    server.send(200, "text/html", html1);
-    
+        )HTML");    
 
     // For GET requests, or if POST was not handled above, send the main page HTML
     // If it's a GET request, perform the scan and populate the dropdown
@@ -958,7 +900,9 @@ void WebServer::handleWiFiConfigPage() {
             };
             std::vector<NetworkInfo> networks;
             for (int i = 0; i < n; ++i) {
-                networks.push_back({WiFi.SSID(i), WiFi.RSSI(i)});
+                if (WiFi.SSID(i).length() > 0) {
+                    networks.push_back({WiFi.SSID(i), WiFi.RSSI(i)});
+                }
             }
             
             // Sort networks by RSSI (strongest first)
@@ -977,7 +921,31 @@ void WebServer::handleWiFiConfigPage() {
         // Replace the placeholder/scanning message with actual network options
         WiFi.scanDelete(); // Free memory from scan results
     }
-    server.sendContent(html2);
+    html = F(R"HTML(
+        </select><br><br>
+        <label for='manual_ssid'>Or Enter SSID Manually:</label><br>
+        <input type='text' id='manual_ssid' name='manual_ssid' style='padding: 8px; margin-bottom: 10px; width: calc(100% - 18px); max-width: 282px;'><br><br>
+        <label for='password'>Password:</label><br>
+        <input type='password' id='password' name='password' style='padding: 8px; margin-bottom: 20px; width: calc(100% - 18px); max-width: 282px;'><br><br>
+        <button type='submit' name='action' value='connect' class='button' style='background-color: #28a745;'>Connect to WiFi</button>
+      </form><br>
+  
+      <h2>Reset Current Settings</h2>
+      <div class='info'>
+        <p>Alternatively, you can reset all WiFi settings.</p>
+        <p>The device will restart in configuration mode, creating a WiFi access point named <strong>PoolFilterAP</strong>.</p>
+        <p>Connect to this network and navigate to <strong>192.168.4.1</strong> to configure your new WiFi settings.</p>
+      </div>
+      <form method='POST' action='/wifi' onsubmit='return confirm("Are you sure you want to reset WiFi settings? The device will restart.");'>
+        <button type='submit' name='action' value='reset' class='button'>Reset WiFi Settings</button>
+      </form>
+      
+      <a href='/' class='back-link'>Back to Home</a>
+    </div>
+  </body>
+  </html>
+  )HTML");
+    server.sendContent(html);
     server.sendContent("");
 }
 
@@ -1040,7 +1008,8 @@ void WebServer::handleStopBackflush() {
 }
 
 void WebServer::handleSettings() {
-  String html = R"HTML(
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  String html = F(R"HTML(
 <!DOCTYPE html>
 <html>
 <head>
@@ -1072,7 +1041,9 @@ void WebServer::handleSettings() {
           <form id='sensorForm'>
             <div class='form-group'>
               <label for='sensormax'>Maximum Pressure (bar):</label>
-              <input type='number' id='sensormax' name='sensormax' min='1.0' max='10.0' step='0.5' value=')HTML" + String(PRESSURE_MAX, 1) + R"HTML('>
+              <input type='number' id='sensormax' name='sensormax' min='1.0' max='10.0' step='0.5' value=')HTML");
+  server.send(200, "text/html", html);
+  html = String(PRESSURE_MAX, 1) + R"HTML('>
               <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>
             </div>
             <button type='button' onclick='saveSensorConfig()'>Save Configuration</button>
@@ -1082,13 +1053,17 @@ void WebServer::handleSettings() {
         <div style='flex: 1; border-left: 1px solid #ddd; padding-left: 20px; margin-left: 20px;'>
           <h3>Sensor Debug Info</h3>
           <table style='width: 100%; border-collapse: collapse;'>
-            <tr><td style='padding: 5px 0;'><strong>Raw ADC Value:</strong></td><td>)HTML" + String(rawADCValue) + R"HTML( / 1023</td></tr>
+            <tr><td style='padding: 5px 0;'><strong>Raw ADC Value:</strong></td><td>)HTML";
+  server.sendContent(html);
+  html = String(rawADCValue) + R"HTML( / 1023</td></tr>
             <tr><td style='padding: 5px 0;'><strong>Voltage:</strong></td><td>)HTML" + String(sensorVoltage, 3) + R"HTML( V</td></tr>
             <tr><td style='padding: 5px 0;'><strong>Pressure:</strong></td><td>)HTML" + String(currentPressure, 2) + R"HTML( bar</td></tr>
             <tr><td style='padding: 5px 0;'><strong>Min Voltage:</strong></td><td>)HTML" + String(VOLTAGE_MIN, 2) + R"HTML( V</td></tr>
             <tr><td style='padding: 5px 0;'><strong>Max Voltage:</strong></td><td>)HTML" + String(VOLTAGE_MAX, 2) + R"HTML( V</td></tr>
             <tr><td style='padding: 5px 0;'><strong>Min Pressure:</strong></td><td>)HTML" + String(PRESSURE_MIN, 1) + R"HTML( bar</td></tr>
-            <tr><td style='padding: 5px 0;'><strong>Max Pressure:</strong></td><td>)HTML" + String(PRESSURE_MAX, 1) + R"HTML( bar</td></tr>
+            <tr><td style='padding: 5px 0;'><strong>Max Pressure:</strong></td><td>)HTML" + String(PRESSURE_MAX, 1);
+  server.sendContent(html);          
+  html = R"HTML( bar</td></tr>
           </table>
           <p><small>This information updates when you refresh the page</small></p>
         </div>
@@ -1099,17 +1074,78 @@ void WebServer::handleSettings() {
       <h2>Software Update</h2>
       <p>Current Version: )HTML" + String(__DATE__ " " __TIME__) + R"HTML(</p>
       <p>You can update the device's software using the Over-The-Air (OTA) update feature.</p>
-      <p>Device hostname: )HTML" + String(HOSTNAME) + R"HTML(.local</p>
+      <p>Device hostname: )HTML" + String(HOSTNAME) + ".local</p>";
+  server.sendContent(html);
+  html = F(R"HTML(
       <p>Update options:</p>
       <div style='margin: 20px 0;'>
         <h3>Option 1: IDE Upload</h3>
         <ol>
           <li>Click 'Enable OTA Updates'</li>
           <li>Use PlatformIO or Arduino IDE to upload new firmware within 5 minutes</li>
-)HTML";
-  
-  server.send(200, "text/html", html);
-  Serial.printf("[Memory] handleSettings end: %d bytes free\n", ESP.getFreeHeap());
+
+        </ol>
+        <button type='button' onclick='enableOTA()' class='button'>Enable OTA Updates</button>
+        <p id='otaStatus'></p>
+      </div>
+      <div style='margin: 20px 0;'>
+        <h3>Option 2: Web Upload</h3>
+        <ol>
+          <li>Click the button below to go to the web uploader</li>
+          <li>Select a firmware .bin file and upload it directly</li>
+        </ol>
+        <a href='/otaupload' class='button' style='background-color: #e67e22;'>Web Firmware Uploader</a>
+      </div>
+    </div>
+<p><a href='/' class='button'>Back to Home</a></p>
+
+    <script>
+      function saveSensorConfig() {
+        const sensormax = document.getElementById('sensormax').value;
+        const status = document.getElementById('configStatus');
+        
+        fetch('/sensorconfig', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'sensormax=' + sensormax
+        })
+        .then(response => response.text())
+        .then(data => {
+          status.textContent = data;
+          status.style.color = 'green';
+          setTimeout(() => { status.textContent = ''; }, 3000);
+        })
+        .catch(error => {
+          status.textContent = 'Error: ' + error;
+          status.style.color = 'red';
+        });
+      }
+
+      function enableOTA() {
+        const status = document.getElementById('otaStatus');
+        status.textContent = 'Enabling OTA updates...';
+        status.style.color = 'blue';
+        
+        fetch('/ota', {
+          method: 'POST',
+        })
+        .then(response => response.text())
+        .then(data => {
+          status.textContent = data;
+          status.style.color = 'green';
+        })
+        .catch(error => {
+          status.textContent = 'Error: ' + error;
+          status.style.color = 'red';
+        });
+      }
+    </script>
+  </div>
+</body>
+</html>
+)HTML");
+  server.sendContent(html);
+  server.sendContent("");
 }
 
 void WebServer::handleSensorConfig() {
@@ -1191,8 +1227,7 @@ void WebServer::handleSetRetention() {
 }
 
 void WebServer::handleOTAUploadPage() {
-    Serial.printf("[Memory] handleOTAUploadPage start: %d bytes free\n", ESP.getFreeHeap());
-    String html = R"HTML(
+    String html = F(R"HTML(
 <!DOCTYPE html>
 <html>
 <head>
@@ -1225,8 +1260,6 @@ void WebServer::handleOTAUploadPage() {
     <p class='warning'>Warning: Do not disconnect or power off the device during update!</p>
     <p><a href='/settings'>Back to Settings</a></p>
   </div>
-
-  <p style='font-size: 10px; color: #666; text-align: center; margin-top: 20px;'>Free memory: " + String(ESP.getFreeHeap()) + " bytes</p>
 
   <script>
     document.getElementById('upload_form').addEventListener('submit', function(e) {
@@ -1266,16 +1299,14 @@ void WebServer::handleOTAUploadPage() {
   </script>
 </body>
 </html>
-)HTML";
+)HTML");
     
     server.send(200, "text/html", html);
-    Serial.printf("[Memory] handleOTAUploadPage end: %d bytes free\n", ESP.getFreeHeap());
 }
 
 
 
 void WebServer::handleOTAUpload() {
-    Serial.printf("[Memory] handleOTAUpload start: %d bytes free\n", ESP.getFreeHeap());
     HTTPUpload& upload = server.upload();
     
     if (upload.status == UPLOAD_FILE_START) {
@@ -1308,23 +1339,42 @@ void WebServer::handleOTAUpload() {
         }
     } 
     else if (upload.status == UPLOAD_FILE_END) {
-        if (Update.end(true)) {
-            Serial.printf("Update Success: %u bytes\n", upload.totalSize);
-            
-            // Show 100% on OLED
-            if (display) {
-                display->showFirmwareUpdateProgress(100);
-            }
-            
-            server.send(500, "text/plain", "UPDATE FAILED");
-        }
-    } 
-    else if (upload.status == UPLOAD_FILE_ABORTED) {
-        Update.end();
-        Serial.println("Update aborted");
-        server.send(400, "text/plain", "Update aborted");
-    }
-    
+      if (Update.end(true)) {
+          Serial.printf("Update Success: %u bytes\n", upload.totalSize);
+          
+          // Show 100% on OLED
+          if (display) {
+              display->showFirmwareUpdateProgress(100);
+          }
+          
+          // Send response with redirect after 5 seconds
+          server.sendHeader("Connection", "close");
+          server.sendHeader("Access-Control-Allow-Origin", "*");
+          server.send(200, "text/html", 
+              "<!DOCTYPE html><html><head><title>Update Success</title>"
+              "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+              "<style>body{font-family:Arial,sans-serif;margin:20px;text-align:center;}"
+              "h1{color:#4CAF50;}</style>"
+              "<meta http-equiv='refresh' content='5;url=/'>"
+              "</head><body>"
+              "<h1>Update Successful!</h1>"
+              "<p>Device will restart now.</p>"
+              "<p>You will be redirected to the home page in 5 seconds...</p>"
+              "</body></html>");
+          
+          // Restart ESP after a short delay
+          delay(1000);
+          ESP.restart();
+      } else {
+          Update.printError(Serial);
+          server.send(500, "text/plain", "UPDATE FAILED");
+      }
+  } 
+  else if (upload.status == UPLOAD_FILE_ABORTED) {
+      Update.end();
+      Serial.println("Update aborted");
+      server.send(400, "text/plain", "Update aborted");
+  }
     // Avoid timeout issues during upload
     yield();
 }
