@@ -307,6 +307,8 @@ void handleBackflush() {
     currentBackflushType = "Auto";  // Set type to Auto for automatic backflush
     digitalWrite(RELAY_PIN, LOW);  // Activate relay
     digitalWrite(LED_PIN, LOW);    // Turn LED ON (inverse logic on NodeMCU)
+    backflushLogger->logEvent(backflushTriggerPressure, backflushDuration, currentBackflushType);
+    
     Serial.print("Backflush started at pressure: ");
     Serial.print(backflushTriggerPressure, 1);
     Serial.println(" bar");

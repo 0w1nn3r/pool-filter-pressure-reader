@@ -62,7 +62,7 @@ void Settings::setBackflushThreshold(float threshold) {
         return;
     }
     
-    if (threshold >= 0.5 && threshold <= 4.0) {  // Assuming 4.0 bar is max
+    if (threshold >= 0.2 && threshold <= 4.0) {  // Assuming 4.0 bar is max
         preferences.putFloat(KEY_THRESHOLD, threshold);
     }
 }
