@@ -320,7 +320,7 @@ html = F(R"HTML(
     xhr.open('GET', '/api', true);
     xhr.send();
   }
-    
+
 // Function to update the colored arcs based on threshold
 function updateGaugeArcs(threshold) {
   var maxPressure = parseFloat(document.getElementById('max-pressure-value').textContent);
@@ -503,7 +503,7 @@ html = R"HTML(<body>
       <form id='backflushForm'>
         <div class='form-group'>
           <label for='threshold'>Threshold (bar):</label>
-          <input type='number' id='threshold' name='threshold' min='0.3' max=')HTML"; 
+          <input type='number' id='threshold' name='threshold' min='0.2' max=')HTML"; 
   server.sendContent(html);
   server.sendContent(String(PRESSURE_MAX) + "' step='0.1' value='" + String(backflushThreshold, 1));
   html = R"HTML('>
@@ -576,7 +576,7 @@ void WebServer::handleBackflushConfig() {
     unsigned int newDuration = server.arg("duration").toInt();
     
     // Validate values
-    if (newThreshold >= 0.3 && newThreshold <= PRESSURE_MAX && 
+    if (newThreshold >= 0.2 && newThreshold <= PRESSURE_MAX && 
         newDuration >= 3 && newDuration <= 300) {
       backflushThreshold = newThreshold;
       backflushDuration = newDuration;
@@ -800,15 +800,15 @@ void WebServer::handlePressureHistory() {
     </script>
     <div style="margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
       <h3>Data Retention Settings</h3>
-      <form id=\"retentionForm\">
-        <label for=\"retentionDays\">Keep pressure data for: </label>
-        <input type=\"number\" id=\"retentionDays\" name=\"retentionDays\" min=\"1\" max=\"90\" value=")HTML");
+      <form id="retentionForm">
+        <label for="retentionDays">Keep pressure data for: </label>
+        <input type="number" id="retentionDays" name="retentionDays" min="1" max="90" value=")HTML");
     server.sendContent(html);    
     server.sendContent(String(settings.getDataRetentionDays()));
-    server.sendContent(F(R"HTML(" style=\"width: 60px;\"> days
-        <button type=\"button\" onclick="saveRetentionSettings()" style=\"margin-left: 10px;\">Save</button>
+    server.sendContent(F(R"HTML(" style="width: 60px;"> days
+        <button type="button" onclick="saveRetentionSettings()" style="margin-left: 10px;">Save</button>
         <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>
-        <p id="retentionStatus" style=\"font-weight: bold;\"></p>
+        <p id="retentionStatus" style="font-weight: bold;"></p>
       </form>
     </div>
     <script>
