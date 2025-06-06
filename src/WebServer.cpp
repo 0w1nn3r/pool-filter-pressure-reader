@@ -6,6 +6,8 @@ extern "C" {
 #include <functional>
 }
 
+#include <set> // For std::set to track unique SSIDs
+
 // Pressure sensor calibration
 extern float PRESSURE_MAX;
 
@@ -959,6 +961,21 @@ void WebServer::handleWiFiConfigPage() {
                 [](const NetworkInfo& a, const NetworkInfo& b) {
                     return a.rssi > b.rssi;
                 });
+            
+            // Remove duplicate SSIDs, keeping only the strongest signal
+            std::vector<NetworkInfo> uniqueNetworks;
+            std::set<String> seenSSIDs;
+            
+            for (const auto& network : networks) {
+                if (seenSSIDs.find(network.ssid) == seenSSIDs.end()) {
+                    // This is the first occurrence of this SSID (and strongest due to sorting)
+                    uniqueNetworks.push_back(network);
+                    seenSSIDs.insert(network.ssid);
+                }
+            }
+            
+            // Replace the original vector with the deduplicated one
+            networks = std::move(uniqueNetworks);
             
             options = "<option value=''>-- Select a Network --</option>";
             for (const auto& network : networks) {
