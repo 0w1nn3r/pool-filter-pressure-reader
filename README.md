@@ -81,7 +81,7 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 10. The device will automatically activate the backflush relay when pressure exceeds the threshold
 11. Each backflush event is logged with timestamp and pressure reading
 12. View the backflush event log by clicking the "Backflush Log" link on the main page
-13. The web page auto-refreshes every 5 seconds
+13. The web page auto-updates live
 14. For programmatic access, use the `/api` endpoint which returns JSON data
 
 ### Display Layout
@@ -100,14 +100,15 @@ The OLED display layout looks like this:
 +----------------------------+
 ```
 
-The top row shows WiFi signal strength and the last two octets of the IP address. The center shows the current pressure reading in bar with large digits for easy reading. The bottom row shows either the backflush threshold or active backflush status with countdown.
+The top row shows WiFi signal strength and the last two octets of the IP address. The center shows the current pressure reading in bar with large digits for easy reading. The bottom row shows either the backflush threshold, active backflush status with countdown or the next scheduled backflush.
 
 ### Resetting All Settings
 
 1. Press and hold the reset button while powering on the device
 2. The display will show a countdown 
-3. Release the button after countdown ends and the device will clear all settings (WiFi credentials, backflush configuration, stored history, etc.)
+3. Release the button after countdown ends and the device will clear all settings (WiFi credentials, backflush configuration, stored history, schedules etc.)
 4. The device will restart and enter configuration mode
+5. Holding for 3 seconds while the device is powered just reboots it
 
 ## Troubleshooting
 
@@ -118,34 +119,6 @@ The top row shows WiFi signal strength and the last two octets of the IP address
 - If the device is stuck in a reboot loop, try flashing the firmware again
 - If no OLED display is connected, the system will continue to function normally - use the web interface for monitoring
 - To verify the system is working without a display, check the serial monitor for status messages
-
-## Web Interface
-
-### Main Dashboard
-- Real-time pressure display with visual gauge
-- Current time display (synchronized via NTP and with timezone via IP geolocation)
-- Backflush configuration settings
-- Manual backflush trigger button
-- Links to backflush event log, pressure history, sensor settings,and WiFi settings
-
-### Backflush Log Page
-- Table of all backflush events with date, time, pressure, and duration
-- Option to clear the log history
-- Navigation back to the main dashboard
-
-### Pressure History Page
-- Interactive graph showing pressure readings over time
-- Zoom in and out
-- Automatic recording of significant pressure changes (0.1 bar or more)
-- Option to clear pressure history
-- Option to set auto prune age
-- Option to export pressure history as CSV
-- Navigation between dashboard and backflush log
-
-### WiFi Settings Page
-- Display current WiFi network information (SSID, IP address, signal strength)
-- Option to reset WiFi settings and enter configuration mode
-- Automatically creates an access point for new WiFi setup
 
 ## Web Interface
 
@@ -163,7 +136,7 @@ The top row shows WiFi signal strength and the last two octets of the IP address
 - `/clearlog` - Clear the backflush event log
 
 ### Pressure Monitoring
-- `/pressure` - Interactive pressure history graph
+- `/pressure` - Interactive pressure history graph with zooming
 - `/pressure.csv` - Download pressure history in CSV format
 - `/clearpressure` - Clear pressure history data
 
