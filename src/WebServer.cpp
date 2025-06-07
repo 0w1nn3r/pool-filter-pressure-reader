@@ -206,7 +206,7 @@ void WebServer::handleCSS() {
 void WebServer::handleRoot() {
   Serial.println("Client connected: " + server.client().remoteIP().toString());
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  String html = R"HTML(
+  String html = F(R"HTML(
 <!DOCTYPE html>
 <html>
 <head>
@@ -214,7 +214,7 @@ void WebServer::handleRoot() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pool Filter Pressure Monitor</title>
   <link rel="stylesheet" href="/style.css">
-</head>)HTML";
+</head>)HTML");
 server.send(200, "text/html", html);
   
   // Add javascript
@@ -487,7 +487,7 @@ html = R"HTML(<body>
   server.sendContent(html);
 
   // Add navigation links
-  html = R"HTML(
+  html = F(R"HTML(
     <div class='navigation'>
       <p>
         <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>
@@ -496,33 +496,33 @@ html = R"HTML(<body>
         <a href='/wifi'>WiFi Settings</a>
       </p>
     </div>
-  )HTML";
+  )HTML");
+  server.sendContent(html);
   
   // Add backflush configuration form
-  html += R"HTML(
+  html = F(R"HTML(
     <div class='backflush-config'>
       <h2>Backflush Configuration</h2>
       <form id='backflushForm'>
         <div class='form-group'>
           <label for='threshold'>Threshold (bar):</label>
-          <input type='number' id='threshold' name='threshold' min='0.2' max=')HTML"; 
+          <input type='number' id='threshold' name='threshold' min='0.2' max=')HTML"); 
   server.sendContent(html);
   server.sendContent(String(PRESSURE_MAX) + "' step='0.1' value='" + String(backflushThreshold, 1));
-  html = R"HTML('>
+  html = F(R"HTML('>
         </div>
         <div class='form-group'>
           <label for='duration'>Duration (sec):</label>
-          <input type='number' id='duration' name='duration' min='5' max='300' step='1' value=')HTML";
+          <input type='number' id='duration' name='duration' min='5' max='300' step='1' value=')HTML");
   server.sendContent(html);
   server.sendContent(String(backflushDuration));
-  html = 
-    R"HTML('>
+  html = F(R"HTML('>
         </div>
         <button type='button' onclick='saveConfig()'>Save Configuration</button>
         <p id='configStatus'></p>
       </form>
     </div>
-  )HTML";
+  )HTML");
   server.sendContent(html);
 
   html = "    <p>API: <a href='/api'>/api</a> (JSON format)</p>\n";
@@ -701,7 +701,7 @@ void WebServer::handlePressureHistory() {
     server.sendContent(pressureLogger.getReadingsAsJson());
     server.sendContent(";\n");
     
-    html = R"HTML(  // Check if we have data
+    html = F(R"HTML(  // Check if we have data
       if (!pressureData || !pressureData.readings || pressureData.readings.length === 0) {
         document.getElementById('chart-container').innerHTML = '<p>No pressure readings recorded yet.</p>';
       } else {
@@ -717,7 +717,7 @@ void WebServer::handlePressureHistory() {
           chartData.push({
             x: localTime,
             y: reading.pressure
-          });})HTML";
+          });})HTML");
     server.sendContent(html);
 
     html = F(R"HTML(    // Create the chart
@@ -901,7 +901,7 @@ void WebServer::handleWiFiConfigPage() {
     }
 
     server.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    String html = R"HTML(
+    String html = F(R"HTML(
 <!DOCTYPE html>
 <html>
 <head>
@@ -923,7 +923,7 @@ void WebServer::handleWiFiConfigPage() {
     <h1>WiFi Settings</h1>
     
     <div class='info'>
-      <p>Current WiFi Network: <strong>)HTML"; 
+      <p>Current WiFi Network: <strong>)HTML"); 
     server.send(200, "text/html", html);
     server.sendContent(WiFi.SSID() + "</strong></p><p>IP Address: " + WiFi.localIP().toString());
     server.sendContent("</p><p>Signal Strength: " + String(WiFi.RSSI()) + " dBm</p>");
@@ -998,12 +998,12 @@ void WebServer::handleWiFiConfigPage() {
   
       <h2>Reset Current Settings</h2>
       <div class='info'>
-        <p>Alternatively, you can reset all WiFi settings.</p>
-        <p>The device will restart in configuration mode, creating a WiFi access point named <strong>PoolFilterAP</strong>.</p>
+        <p>Alternatively, you can reset all device settings.</p>
+        <p>The device will restart in factory new configuration mode, creating a WiFi access point named <strong>PoolFilterAP</strong>.</p>
         <p>Connect to this network and navigate to <strong>192.168.4.1</strong> to configure your new WiFi settings.</p>
       </div>
-      <form method='POST' action='/wifi' onsubmit='return confirm("Are you sure you want to reset WiFi settings? The device will restart.");'>
-        <button type='submit' name='action' value='reset' class='button'>Reset WiFi Settings</button>
+      <form method='POST' action='/wifi' onsubmit='return confirm("Are you sure you want to reset all settings? The device will restart.");'>
+        <button type='submit' name='action' value='reset' class='button'>Factory Reset</button>
       </form>
       
       <a href='/' class='back-link'>Back to Home</a>
