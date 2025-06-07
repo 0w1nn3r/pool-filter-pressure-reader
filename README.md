@@ -10,13 +10,14 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - Automatic backflush control with configurable threshold and duration
 - Scheduled backflush operations with support for multiple schedules
 - Backflush event logging with timestamps and pressure readings
-- NTP time synchronization for accurate timestamps
+- NTP time synchronization and geo based time zone detection for accurate timestamps
 - Pressure history logging with graphical display
 - Automatic space management to prevent running out of storage
 - WiFi settings management directly from the web interface
-- Persistent settings storage using the EEPROM
+- Persistent settings storage using the flash filesystem
 - JSON API endpoint for integration with other systems
 - WiFi configuration portal for easy setup
+- Web based firmware upgrade facility
 - Reset button to clear all settings when needed
 
 ## Hardware Requirements
