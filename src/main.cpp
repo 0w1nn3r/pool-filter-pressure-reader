@@ -11,6 +11,7 @@
 #include "Settings.h"
 #include "BackflushLogger.h"
 #include "PressureLogger.h"
+#include "BackflushScheduler.h"
 
 // OLED Display Configuration
 #define SCREEN_WIDTH 128
@@ -47,6 +48,7 @@ TimeManager* timeManager;
 Settings* settings;
 BackflushLogger* backflushLogger;
 PressureLogger* pressureLogger;
+BackflushScheduler* scheduler;
 
 // Variables
 float currentPressure = 0.0;
@@ -166,14 +168,19 @@ void setup() {
   pressureLogger = new PressureLogger(*timeManager, *settings);
   pressureLogger->begin();
   
+  // Initialize backflush scheduler
+  scheduler = new BackflushScheduler(*timeManager);
+  scheduler->begin();
+  
   // Initialize web server
   webServer = new WebServer(currentPressure, rawADCValue, sensorVoltage, backflushThreshold, backflushDuration, 
-                           backflushActive, backflushStartTime, backflushConfigChanged,
-                           currentBackflushType, *timeManager, *backflushLogger, *settings, *pressureLogger);
+                            backflushActive, backflushStartTime, backflushConfigChanged,
+                            currentBackflushType, *timeManager, *backflushLogger, *settings, *pressureLogger, *scheduler);
   webServer->begin();
   
-  // Connect WebServer and Display for bidirectional communication
+  // Connect components for bidirectional communication
   displayManager->setWebServer(webServer);
+  displayManager->setScheduler(scheduler);
   webServer->setDisplay(displayManager);
   
   delay(2000);  // Display startup message for 2 seconds
@@ -185,6 +192,54 @@ void loop() {
   
   // Handle WiFi and server
   webServer->handleClient();
+  
+  // Check for scheduled backflush if time is initialized
+  static unsigned long lastScheduleCheck = 0;
+  static time_t lastNextScheduledTime = 0;
+  static unsigned long lastDisplayUpdate = 0;
+  
+  if (timeManager->isTimeInitialized()) {
+    unsigned long currentMillis = millis();
+    
+    // Check for scheduled backflush every 30 seconds
+    if (currentMillis - lastScheduleCheck >= 30000) {
+      lastScheduleCheck = currentMillis;
+      
+      // Check if a scheduled backflush should be triggered
+      unsigned int scheduledDuration = 0;
+      if (!backflushActive && scheduler->checkSchedules(timeManager->getCurrentTime(), scheduledDuration)) {
+        // Set the backflush duration to the scheduled duration
+        backflushDuration = scheduledDuration;
+        
+        // Set flag for scheduled backflush
+        currentBackflushType = "Scheduled";
+        needManualBackflush = true; // Use the manual backflush flag to trigger it
+      }
+    }
+    
+    // Update the next scheduled backflush display every minute
+    if (displayManager && displayManager->isDisplayAvailable() && 
+        (currentMillis - lastDisplayUpdate >= 60000 || lastDisplayUpdate == 0)) {
+      lastDisplayUpdate = currentMillis;
+      
+      // Get the next scheduled backflush time
+      time_t nextTime;
+      unsigned int duration;
+      if (scheduler->getNextScheduledTime(nextTime, duration)) {
+        // Only update if the next scheduled time has changed
+        if (nextTime != lastNextScheduledTime) {
+          lastNextScheduledTime = nextTime;
+          displayManager->showNextScheduledBackflush(nextTime, duration);
+        }
+      } else {
+        // No scheduled backflushes
+        if (lastNextScheduledTime != 0) {
+          lastNextScheduledTime = 0;
+          displayManager->showNextScheduledBackflush(0, 0);
+        }
+      }
+    }
+  }
   
   // Read pressure at regular intervals
   unsigned long currentTime = millis();
@@ -307,15 +362,42 @@ void handleBackflush() {
     backflushActive = true;
     backflushStartTime = millis();
     backflushTriggerPressure = currentPressure; // Store the pressure that triggered the backflush
-    currentBackflushType = needManualBackflush ? "Manual" : "Auto";  // Set type to Auto for automatic backflush
+    
+    // If needManualBackflush is true but currentBackflushType is not set, default to "Manual"
+    if (needManualBackflush && currentBackflushType != "Scheduled") {
+      currentBackflushType = "Manual";
+    }
+    
     digitalWrite(RELAY_PIN, LOW);  // Activate relay
     digitalWrite(LED_PIN, LOW);    // Turn LED ON (inverse logic on NodeMCU)
+    
+    // Log the backflush event
     backflushLogger->logEvent(backflushTriggerPressure, backflushDuration, currentBackflushType);
     
-    Serial.print("Backflush started at pressure: ");
+    // Log to serial
+    Serial.println("\n=== BACKFLUSH STARTED ===");
+    Serial.print("Type: ");
+    Serial.println(currentBackflushType);
+    Serial.print("Trigger Pressure: ");
     Serial.print(backflushTriggerPressure, 1);
     Serial.println(" bar");
+    Serial.print("Duration: ");
+    Serial.print(backflushDuration);
+    Serial.println(" seconds");
+    
+    // Display message on OLED if available
+    if (displayManager && displayManager->isDisplayAvailable()) {
+      String message = "Type: " + String(currentBackflushType) + 
+                     "\nDuration: " + String(backflushDuration) + "s";
+      displayManager->showMessage("Backflush Started", message);
+    }
+    
+    // Reset the flags
     needManualBackflush = false;
+    if (currentBackflushType == "Scheduled") {
+      // Reset to default for next time
+      currentBackflushType = "Auto";
+    }
   }
   
   // Check if backflush should be stopped
@@ -351,7 +433,12 @@ void resetSettings() {
   // Reset settings to defaults
   settings->reset();
   
-  Serial.println("RESET BUTTON PRESSED - Clearing all settings");
+  // Clear backflush schedules
+  if (scheduler) {
+    scheduler->clearSchedules();
+  }
+  
+  Serial.println("RESET BUTTON PRESSED - Clearing all settings and schedules");
   
   // Visual feedback if display is available
   if (displayManager->isDisplayAvailable()) {

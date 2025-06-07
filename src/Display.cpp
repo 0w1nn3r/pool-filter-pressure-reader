@@ -12,6 +12,7 @@ Display::Display(Adafruit_SSD1306& oled, float& pressure, float& threshold,
       displayAvailable(false),
       timeManager(tm),
       webServer(nullptr),
+      scheduler(nullptr),
       lastOtaFlashTime(0),
       showOtaText(false) {
 }
@@ -195,10 +196,11 @@ void Display::updateDisplay() {
     display.print(F("bar"));
   }
   
-  // Display backflush status at bottom
+  // Display backflush status at bottom left
   display.setTextSize(1);
   display.setCursor(0, 56);
   if (backflushActive) {
+    // Show backflush progress
     unsigned long elapsedTime = (millis() - backflushStartTime) / 1000;
     display.print(F("BACKFLUSH: "));
     display.print(elapsedTime);
@@ -206,9 +208,33 @@ void Display::updateDisplay() {
     display.print(backflushDuration);
     display.print(F("s"));
   } else {
+    // Show threshold
     display.print(F("Threshold: "));
     display.print(backflushThreshold, 1);
     display.print(F(" bar"));
+    
+    // Show next scheduled backflush time at bottom right
+    if (scheduler) {
+      time_t nextTime;
+      unsigned int duration;
+      if (scheduler->getNextScheduledTime(nextTime, duration)) {
+        char timeStr[10];
+        struct tm *timeinfo = localtime(&nextTime);
+        strftime(timeStr, sizeof(timeStr), "%H:%M", timeinfo);
+        
+        // Calculate position to right-align the time
+        int16_t x1, y1;
+        uint16_t w, h;
+        display.getTextBounds(timeStr, 0, 0, &x1, &y1, &w, &h);
+        int xPos = display.width() - w - 2; // 2px margin from right
+        
+        // Only show if there's enough space
+        if (xPos > 70) { // Leave some space for threshold
+          display.setCursor(xPos, 56);
+          display.print(timeStr);
+        }
+      }
+    }
   }
   
   display.display();
@@ -240,15 +266,110 @@ bool Display::isDisplayAvailable() const {
 }
 
 void Display::showResetCountdown(String message, unsigned int countdownSeconds) {
+  if (!displayAvailable) return;
+  
   display.clearDisplay();
   display.setTextSize(1);
-  display.setTextColor(WHITE);
   display.setCursor(0, 0);
   display.println(message);
-  display.println();
-  display.setTextSize(2);
-  display.print(F("  "));
+  display.print(F("Restarting in "));
   display.print(countdownSeconds);
-  display.println(F(" sec"));
+  display.println(F("s"));
   display.display();
+}
+
+void Display::showMessage(const String& title, const String& message) {
+  if (!displayAvailable) return;
+  
+  display.clearDisplay();
+  
+  // Display title in larger text
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println(title);
+  
+  // Draw a line under the title
+  display.drawLine(0, 10, display.width(), 10, SSD1306_WHITE);
+  
+  // Display message in normal text below the line
+  display.setCursor(0, 15);
+  
+  // Split message into lines at newline characters
+  int lastPos = 0;
+  int newlinePos;
+  int yPos = 15;
+  String line;
+  
+  do {
+    newlinePos = message.indexOf('\n', lastPos);
+    if (newlinePos == -1) {
+      line = message.substring(lastPos);
+    } else {
+      line = message.substring(lastPos, newlinePos);
+      lastPos = newlinePos + 1;
+    }
+    
+    // Handle long lines by wrapping text
+    while (line.length() > 0) {
+      int charsToPrint = min(21, (int)line.length()); // 21 chars per line for 128px width
+      display.setCursor(0, yPos);
+      display.println(line.substring(0, charsToPrint));
+      yPos += 10; // 8px font height + 2px spacing
+      line = line.substring(charsToPrint);
+      
+      // Don't overflow the display
+      if (yPos >= display.height()) {
+        break;
+      }
+    }
+    
+    if (yPos >= display.height()) {
+      break;
+    }
+  } while (newlinePos != -1);
+  
+  display.display();
+}
+void Display::showNextScheduledBackflush(time_t nextTime, unsigned int duration) {
+    if (!displayAvailable) return;
+    
+    // Clear the display
+    display.clearDisplay();
+    
+    // Set text properties
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    
+    // Display title
+    display.setCursor(0, 0);
+    display.println(F("Next Backflush:"));
+    
+    // If nextTime is 0, no scheduled backflush
+    if (nextTime == 0) {
+        display.setCursor(0, 12);
+        display.println(F("No scheduled"));
+        display.println(F("backflushes"));
+        display.display();
+        return;
+    }
+    
+    // Convert time to local time
+    struct tm *timeinfo = localtime(&nextTime);
+    
+    // Format the time string
+    char timeStr[32];
+    strftime(timeStr, sizeof(timeStr), "%a %b %d %H:%M", timeinfo);
+    
+    // Display the next scheduled time
+    display.setCursor(0, 12);
+    display.print(F("When: "));
+    display.println(timeStr);
+    
+    // Display the duration
+    display.print(F("Duration: "));
+    display.print(duration);
+    display.println(F(" sec"));
+    
+    // Update the display
+    display.display();
 }

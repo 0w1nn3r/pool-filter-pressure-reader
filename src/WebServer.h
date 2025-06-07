@@ -10,6 +10,7 @@
 #include "BackflushLogger.h"
 #include "Settings.h"
 #include "PressureLogger.h"
+#include "BackflushScheduler.h"
 #include "Display.h"
 
 // External pin definitions from main.cpp
@@ -37,6 +38,7 @@ private:
     TimeManager& timeManager;
     BackflushLogger& backflushLogger;
     Settings& settings;
+    BackflushScheduler& scheduler;
     
     // OTA update variables
     unsigned long otaEnabledTime;
@@ -70,12 +72,15 @@ private:
     void setupOTA();
     void handleOTAUploadPage();
     void handleOTAUpload();
+    void handleSchedulePage();
+    void handleScheduleUpdate();
+    void handleScheduleDelete();
 
 public:
     WebServer(float& pressure, int& rawADC, float& voltage, float& threshold, unsigned int& duration, 
              bool& active, unsigned long& startTime, bool& configChanged,
              String& backflushType, TimeManager& tm, BackflushLogger& logger, 
-             Settings& settings, PressureLogger& pressureLog);
+             Settings& settings, PressureLogger& pressureLog, BackflushScheduler& sched);
     
     void setDisplay(Display* displayPtr) { display = displayPtr; }
     void begin();

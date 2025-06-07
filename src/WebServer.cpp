@@ -36,7 +36,7 @@ String WebServer::drawArcSegment(float cx, float cy, float radius, float startAn
 WebServer::WebServer(float& pressure, int& rawADC, float& voltage, float& threshold, unsigned int& duration, 
                      bool& active, unsigned long& startTime, bool& configChanged,
                      String& backflushType, TimeManager& tm, BackflushLogger& logger, Settings& settings,
-                     PressureLogger& pressureLog)
+                     PressureLogger& pressureLog, BackflushScheduler& sched)
     : server(80), 
       currentPressure(pressure),
       rawADCValue(rawADC),
@@ -50,6 +50,7 @@ WebServer::WebServer(float& pressure, int& rawADC, float& voltage, float& thresh
       timeManager(tm),
       backflushLogger(logger),
       settings(settings),
+      scheduler(sched),
       otaEnabledTime(0),
       otaEnabled(false),
       pressureLogger(pressureLog),
@@ -108,6 +109,9 @@ void WebServer::begin() {
     server.on("/manualbackflush", HTTP_POST, std::bind(&WebServer::handleManualBackflush, this));
     server.on("/stopbackflush", HTTP_POST, std::bind(&WebServer::handleStopBackflush, this));
     server.on("/settings", [this]() { handleSettings(); });
+    server.on("/schedule", [this]() { handleSchedulePage(); });
+    server.on("/scheduleupdate", HTTP_POST, std::bind(&WebServer::handleScheduleUpdate, this));
+    server.on("/scheduledelete", HTTP_POST, std::bind(&WebServer::handleScheduleDelete, this));
     server.on("/ota", HTTP_POST, [this]() { handleOTAUpdate(); });
     server.on("/otaupload", HTTP_GET, [this]() { handleOTAUploadPage(); });
     server.on("/otaupload", HTTP_POST, 
@@ -486,12 +490,34 @@ html = R"HTML(<body>
   html += "<button type='submit' class='button' style='background-color: #4CAF50; margin-top: 10px;'>Backflush Now</button></form></div>";
   server.sendContent(html);
 
+  // Add next scheduled backflush info if available
+  time_t nextScheduleTime;
+  unsigned int nextScheduleDuration;
+  if (scheduler.getNextScheduledTime(nextScheduleTime, nextScheduleDuration)) {
+    struct tm* timeinfo = localtime(&nextScheduleTime);
+    char timeStr[30];
+    strftime(timeStr, sizeof(timeStr), "%A, %B %d at %H:%M", timeinfo);
+    
+    html = F(R"HTML(
+    <div class='next-schedule' style='margin: 20px auto; max-width: 600px; padding: 10px; background-color: #e8f5e9; border-radius: 8px;'>
+      <h3 style='margin-top: 0;'>Next Scheduled Backflush</h3>
+      <p><strong>)HTML");
+    html += String(timeStr);
+    html += F(R"HTML(</strong> for )HTML");
+    html += String(nextScheduleDuration);
+    html += F(R"HTML( seconds</p>
+    </div>
+    )HTML");
+    server.sendContent(html);
+  }
+
   // Add navigation links
   html = F(R"HTML(
     <div class='navigation'>
       <p>
-        <a href='/log' style='margin-right: 15px;'>View Backflush Log</a>
-        <a href='/pressure' style='margin-right: 15px;'>View Pressure History</a>
+        <a href='/log' style='margin-right: 15px;'>Backflush Log</a>
+        <a href='/pressure' style='margin-right: 15px;'>Pressure History</a>
+        <a href='/schedule' style='margin-right: 15px;'>Schedule</a>
         <a href='/settings' style='margin-right: 15px;'>Settings</a>
         <a href='/wifi'>WiFi Settings</a>
       </p>
@@ -548,28 +574,45 @@ html = R"HTML(<body>
 }
 
 void WebServer::handleAPI() {
-  String json = "{";
-  json += "\"pressure\":" + String(currentPressure, 2) + ",";
+  String action = server.arg("action");
   
-  // Use NTP time if available, otherwise use uptime
-  if (timeManager.isTimeInitialized()) {
-    json += "\"uptime\":" + String(millis() / 1000) + ",";
-    json += "\"datetime\":\"" + timeManager.getFormattedDateTime() + "\",";
-  } else {
-    json += "\"timestamp\":" + String(millis() / 1000) + ",";
+  if (action == "getschedules") {
+    // Return all schedules as JSON
+    String json = scheduler.getSchedulesAsJson();
+    server.send(200, "application/json", json);
   }
-  json += "\"backflush_threshold\":" + String(backflushThreshold, 2) + ",";
-  json += "\"backflush_duration\":" + String(backflushDuration) + ",";
-  json += "\"backflush_active\":" + String(backflushActive ? "true" : "false");
-  
-  if (backflushActive) {
-    unsigned long elapsedTime = (millis() - backflushStartTime) / 1000;
-    json += ",\"backflush_elapsed\":" + String(elapsedTime);
+  else {
+    // Default API response with system status
+    String json = "{";
+    json += "\"pressure\":" + String(currentPressure, 2) + ",";
+    
+    // Use NTP time if available, otherwise use uptime
+    if (timeManager.isTimeInitialized()) {
+      json += "\"uptime\":" + String(millis() / 1000) + ",";
+      json += "\"datetime\":\"" + timeManager.getFormattedDateTime() + "\",";
+    } else {
+      json += "\"timestamp\":" + String(millis() / 1000) + ",";
+    }
+    json += "\"backflush_threshold\":" + String(backflushThreshold, 2) + ",";
+    json += "\"backflush_duration\":" + String(backflushDuration) + ",";
+    json += "\"backflush_active\":" + String(backflushActive ? "true" : "false");
+    
+    if (backflushActive) {
+      unsigned long elapsedTime = (millis() - backflushStartTime) / 1000;
+      json += ",\"backflush_elapsed\":" + String(elapsedTime);
+    }
+    
+    // Add next scheduled backflush if available
+    time_t nextScheduleTime;
+    unsigned int nextScheduleDuration;
+    if (scheduler.getNextScheduledTime(nextScheduleTime, nextScheduleDuration)) {
+      json += ",\"next_scheduled_backflush\":" + String(nextScheduleTime);
+      json += ",\"next_scheduled_duration\":" + String(nextScheduleDuration);
+    }
+    
+    json += "}";
+    server.send(200, "application/json", json);
   }
-  
-  json += "}";
-
-  server.send(200, "application/json", json);
 }
 
 void WebServer::handleBackflushConfig() {
@@ -1440,4 +1483,361 @@ void WebServer::handleOTAUpload() {
   }
     // Avoid timeout issues during upload
     yield();
+}
+
+void WebServer::handleSchedulePage() {
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    String html = F(R"HTML(<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Backflush Schedule</title>
+        <meta name='viewport' content='width=device-width, initial-scale=1'>
+        <link rel='stylesheet' href='/style.css'>
+        <style>
+            .schedule-form { background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+            .schedule-list { margin-top: 30px; }
+            .schedule-item { background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+            .schedule-item.disabled { opacity: 0.6; }
+            .form-row { margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; }
+            .form-row label { min-width: 120px; margin-right: 10px; }
+            .form-row .days-select { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+            .form-row .days-select label { min-width: auto; margin-right: 5px; }
+            .form-row .time-input { display: flex; align-items: center; }
+            .form-row .time-input input { width: 50px; margin-right: 5px; }
+            .button-row { margin-top: 20px; display: flex; gap: 10px; }
+            .button-primary { background-color: #4CAF50; }
+            .button-danger { background-color: #f44336; }
+            .button-secondary { background-color: #2196F3; }
+            .hidden { display: none; }
+            .next-schedule { margin-top: 20px; padding: 10px; background-color: #e8f5e9; border-radius: 8px; }
+        </style>
+    </head>
+    <body>
+        <h1>Backflush Schedule</h1>
+        <p><a href="/">Back to Dashboard</a></p>
+)HTML");
+    server.send(200, "text/html", html);
+
+    // Check if we have a next scheduled backflush
+    time_t nextScheduleTime;
+    unsigned int nextScheduleDuration;
+    if (scheduler.getNextScheduledTime(nextScheduleTime, nextScheduleDuration)) {
+        struct tm* timeinfo = localtime(&nextScheduleTime);
+        char timeStr[30];
+        strftime(timeStr, sizeof(timeStr), "%A, %B %d at %H:%M", timeinfo);
+        
+        html = "<div class='next-schedule'>";
+        html += "<h3>Next Scheduled Backflush</h3>";
+        html += "<p><strong>" + String(timeStr) + "</strong> for " + String(nextScheduleDuration) + " seconds</p>";
+        html += "</div>";
+        server.sendContent(html);
+    }
+
+    // Add form for creating new schedule
+    html = F(R"HTML(
+        <h2>Add New Schedule</h2>
+        <div class="schedule-form">
+            <form id="scheduleForm" action="/scheduleupdate" method="POST">
+                <input type="hidden" name="id" id="scheduleId" value="-1">
+                
+                <div class="form-row">
+                    <label for="enabled">Enabled:</label>
+                    <input type="checkbox" id="enabled" name="enabled" checked>
+                </div>
+                
+                <div class="form-row">
+                    <label for="scheduleType">Schedule Type:</label>
+                    <select id="scheduleType" name="type" onchange="updateFormFields()">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <label for="time">Time:</label>
+                    <div class="time-input">
+                        <input type="number" id="hour" name="hour" min="0" max="23" value="12" required> : 
+                        <input type="number" id="minute" name="minute" min="0" max="59" value="0" required>
+                    </div>
+                </div>
+                
+                <div class="form-row" id="weekdaysRow">
+                    <label>Days of Week:</label>
+                    <div class="days-select">
+                        <label><input type="checkbox" name="weekday" value="0"> Sunday</label>
+                        <label><input type="checkbox" name="weekday" value="1"> Monday</label>
+                        <label><input type="checkbox" name="weekday" value="2"> Tuesday</label>
+                        <label><input type="checkbox" name="weekday" value="3"> Wednesday</label>
+                        <label><input type="checkbox" name="weekday" value="4"> Thursday</label>
+                        <label><input type="checkbox" name="weekday" value="5"> Friday</label>
+                        <label><input type="checkbox" name="weekday" value="6"> Saturday</label>
+                    </div>
+                </div>
+                
+                <div class="form-row hidden" id="monthdaysRow">
+                    <label>Days of Month:</label>
+                    <div class="days-select" id="monthdaysSelect">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <label for="duration">Duration (sec):</label>
+                    <input type="number" id="duration" name="duration" min="5" max="300" value="30" required>
+                </div>
+                
+                <div class="button-row">
+                    <button type="submit" class="button button-primary">Save Schedule</button>
+                    <button type="button" id="cancelButton" class="button button-secondary hidden">Cancel</button>
+                </div>
+            </form>
+        </div>
+        
+        <h2>Current Schedules</h2>
+        <div id="scheduleList" class="schedule-list">
+)HTML");
+    server.sendContent(html);
+
+    // Get all schedules and display them
+    String scheduleList = "";
+    size_t count = scheduler.getScheduleCount();
+    if (count == 0) {
+        scheduleList = "<p>No schedules defined.</p>";
+    } else {
+        for (size_t i = 0; i < count; i++) {
+            BackflushSchedule schedule = scheduler.getSchedule(i);
+            scheduleList += "<div class='schedule-item" + String(schedule.enabled ? "" : " disabled") + "'>";
+            scheduleList += "<h3>Schedule " + String(i + 1) + "</h3>";
+            
+            // Schedule type
+            scheduleList += "<p><strong>Type:</strong> ";
+            switch (schedule.type) {
+                case ScheduleType::DAILY:
+                    scheduleList += "Daily";
+                    break;
+                case ScheduleType::WEEKLY:
+                    scheduleList += "Weekly";
+                    break;
+                case ScheduleType::MONTHLY:
+                    scheduleList += "Monthly";
+                    break;
+            }
+            scheduleList += "</p>";
+            
+            // Time
+            scheduleList += "<p><strong>Time:</strong> " + 
+                            String(schedule.hour) + ":" + 
+                            (schedule.minute < 10 ? "0" : "") + String(schedule.minute) + 
+                            "</p>";
+            
+            // Days
+            if (schedule.type == ScheduleType::WEEKLY) {
+                scheduleList += "<p><strong>Days:</strong> ";
+                const char* weekdays[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+                bool first = true;
+                for (int day = 0; day < 7; day++) {
+                    if (schedule.daysActive & (1 << day)) {
+                        if (!first) scheduleList += ", ";
+                        scheduleList += weekdays[day];
+                        first = false;
+                    }
+                }
+                scheduleList += "</p>";
+            } else if (schedule.type == ScheduleType::MONTHLY) {
+                scheduleList += "<p><strong>Days:</strong> ";
+                bool first = true;
+                for (int day = 0; day < 31; day++) {
+                    if (schedule.daysActive & (1 << day)) {
+                        if (!first) scheduleList += ", ";
+                        scheduleList += String(day + 1);
+                        first = false;
+                    }
+                }
+                scheduleList += "</p>";
+            }
+            
+            // Duration
+            scheduleList += "<p><strong>Duration:</strong> " + String(schedule.duration) + " seconds</p>";
+            
+            // Status
+            scheduleList += "<p><strong>Status:</strong> " + String(schedule.enabled ? "Enabled" : "Disabled") + "</p>";
+            
+            // Edit/Delete buttons
+            scheduleList += "<div class='button-row'>";
+            scheduleList += "<button class='button button-secondary' onclick='editSchedule(" + String(i) + ")'>Edit</button>";
+            scheduleList += "<form method='POST' action='/scheduledelete' style='display:inline;'>";
+            scheduleList += "<input type='hidden' name='id' value='" + String(i) + "'>";
+            scheduleList += "<button type='submit' class='button button-danger' onclick='return confirm(\"Are you sure you want to delete this schedule?\")'>Delete</button>";
+            scheduleList += "</form>";
+            scheduleList += "</div>";
+            
+            scheduleList += "</div>";
+        }
+    }
+    server.sendContent(scheduleList);
+
+    // Add JavaScript for form handling
+    html = F(R"HTML(
+        </div>
+        
+        <script>
+            // Populate month days
+            const monthdaysSelect = document.getElementById('monthdaysSelect');
+            for (let i = 1; i <= 31; i++) {
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = 'monthday';
+                checkbox.value = i - 1; // 0-based index
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(' ' + i));
+                monthdaysSelect.appendChild(label);
+            }
+            
+            // Function to update form fields based on schedule type
+            function updateFormFields() {
+                const scheduleType = document.getElementById('scheduleType').value;
+                const weekdaysRow = document.getElementById('weekdaysRow');
+                const monthdaysRow = document.getElementById('monthdaysRow');
+                
+                weekdaysRow.classList.add('hidden');
+                monthdaysRow.classList.add('hidden');
+                
+                if (scheduleType === 'weekly') {
+                    weekdaysRow.classList.remove('hidden');
+                } else if (scheduleType === 'monthly') {
+                    monthdaysRow.classList.remove('hidden');
+                }
+            }
+            
+            // Initialize form fields
+            updateFormFields();
+            
+            // Function to edit a schedule
+            function editSchedule(id) {
+                // Get schedule data from JSON
+                fetch('/api?action=getschedules')
+                    .then(response => response.json())
+                    .then(data => {
+                        const schedule = data.schedules.find(s => s.id === id);
+                        if (!schedule) return;
+                        
+                        // Update form fields
+                        document.getElementById('scheduleId').value = id;
+                        document.getElementById('enabled').checked = schedule.enabled;
+                        document.getElementById('scheduleType').value = schedule.type;
+                        document.getElementById('hour').value = schedule.hour;
+                        document.getElementById('minute').value = schedule.minute;
+                        document.getElementById('duration').value = schedule.duration;
+                        
+                        // Update days checkboxes
+                        if (schedule.type === 'weekly') {
+                            const weekdayCheckboxes = document.getElementsByName('weekday');
+                            for (let i = 0; i < weekdayCheckboxes.length; i++) {
+                                const day = parseInt(weekdayCheckboxes[i].value);
+                                weekdayCheckboxes[i].checked = (schedule.daysActive & (1 << day)) !== 0;
+                            }
+                        } else if (schedule.type === 'monthly') {
+                            const monthdayCheckboxes = document.getElementsByName('monthday');
+                            for (let i = 0; i < monthdayCheckboxes.length; i++) {
+                                const day = parseInt(monthdayCheckboxes[i].value);
+                                monthdayCheckboxes[i].checked = (schedule.daysActive & (1 << day)) !== 0;
+                            }
+                        }
+                        
+                        // Update form visibility
+                        updateFormFields();
+                        
+                        // Show cancel button
+                        document.getElementById('cancelButton').classList.remove('hidden');
+                        
+                        // Scroll to form
+                        document.querySelector('.schedule-form').scrollIntoView({ behavior: 'smooth' });
+                    });
+            }
+            
+            // Cancel button handler
+            document.getElementById('cancelButton').addEventListener('click', function() {
+                document.getElementById('scheduleForm').reset();
+                document.getElementById('scheduleId').value = -1;
+                document.getElementById('cancelButton').classList.add('hidden');
+                updateFormFields();
+            });
+        </script>
+    </body>
+    </html>
+)HTML");
+    server.sendContent(html);
+    server.sendContent("");
+}
+
+void WebServer::handleScheduleUpdate() {
+    int id = server.arg("id").toInt();
+    bool isNew = (id == -1);
+    
+    // Create schedule object from form data
+    BackflushSchedule schedule;
+    schedule.enabled = server.hasArg("enabled");
+    
+    // Parse schedule type
+    String typeStr = server.arg("type");
+    if (typeStr == "daily") {
+        schedule.type = ScheduleType::DAILY;
+    } else if (typeStr == "weekly") {
+        schedule.type = ScheduleType::WEEKLY;
+    } else if (typeStr == "monthly") {
+        schedule.type = ScheduleType::MONTHLY;
+    }
+    
+    // Parse time
+    schedule.hour = constrain(server.arg("hour").toInt(), 0, 23);
+    schedule.minute = constrain(server.arg("minute").toInt(), 0, 59);
+    
+    // Parse days active
+    schedule.daysActive = 0;
+    if (schedule.type == ScheduleType::WEEKLY) {
+        // Process weekday checkboxes
+        for (int i = 0; i < server.args(); i++) {
+            if (server.argName(i) == "weekday") {
+                int day = server.arg(i).toInt();
+                if (day >= 0 && day < 7) {
+                    schedule.daysActive |= (1 << day);
+                }
+            }
+        }
+    } else if (schedule.type == ScheduleType::MONTHLY) {
+        // Process monthday checkboxes
+        for (int i = 0; i < server.args(); i++) {
+            if (server.argName(i) == "monthday") {
+                int day = server.arg(i).toInt();
+                if (day >= 0 && day < 31) {
+                    schedule.daysActive |= (1 << day);
+                }
+            }
+        }
+    }
+    
+    // Parse duration
+    schedule.duration = constrain(server.arg("duration").toInt(), 5, 300);
+    
+    bool success = false;
+    if (isNew) {
+        success = scheduler.addSchedule(schedule);
+    } else {
+        success = scheduler.updateSchedule(id, schedule);
+    }
+    
+    // Redirect back to schedule page
+    server.sendHeader("Location", "/schedule");
+    server.send(303);
+}
+
+void WebServer::handleScheduleDelete() {
+    int id = server.arg("id").toInt();
+    scheduler.deleteSchedule(id);
+    
+    // Redirect back to schedule page
+    server.sendHeader("Location", "/schedule");
+    server.send(303);
 }

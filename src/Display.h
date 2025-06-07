@@ -7,8 +7,9 @@
 #include <ESP8266WiFi.h>
 #include "TimeManager.h"
 
-// Forward declaration
+// Forward declarations
 class WebServer;
+class BackflushScheduler;
 
 class Display {
 private:
@@ -21,6 +22,7 @@ private:
     bool displayAvailable;
     TimeManager* timeManager;
     WebServer* webServer;
+    BackflushScheduler* scheduler;
     unsigned long lastOtaFlashTime;
     bool showOtaText;
 
@@ -35,11 +37,18 @@ public:
     void showWiFiSetupMode(String apName);
     void setTimeManager(TimeManager* tm) { timeManager = tm; }
     void setWebServer(WebServer* ws) { webServer = ws; }
+    void setScheduler(BackflushScheduler* sched) { scheduler = sched; }
     void showResetMessage();
     void updateDisplay();
     void showFirmwareUpdateProgress(int percentage);
     bool isDisplayAvailable() const;
     void showResetCountdown(String message, unsigned int countdownSeconds);
+    
+    // Show a message on the display with a title and message
+    void showMessage(const String& title, const String& message);
+    
+    // Show the next scheduled backflush time
+    void showNextScheduledBackflush(time_t nextTime, unsigned int duration);
 };
 
 #endif // DISPLAY_H
