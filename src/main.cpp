@@ -195,7 +195,6 @@ void loop() {
   
   // Check for scheduled backflush if time is initialized
   static unsigned long lastScheduleCheck = 0;
-  static time_t lastNextScheduledTime = 0;
   static unsigned long lastDisplayUpdate = 0;
   
   if (timeManager->isTimeInitialized()) {
@@ -221,23 +220,7 @@ void loop() {
     if (displayManager && displayManager->isDisplayAvailable() && 
         (currentMillis - lastDisplayUpdate >= 60000 || lastDisplayUpdate == 0)) {
       lastDisplayUpdate = currentMillis;
-      
-      // Get the next scheduled backflush time
-      time_t nextTime;
-      unsigned int duration;
-      if (scheduler->getNextScheduledTime(nextTime, duration)) {
-        // Only update if the next scheduled time has changed
-        if (nextTime != lastNextScheduledTime) {
-          lastNextScheduledTime = nextTime;
-          displayManager->showNextScheduledBackflush(nextTime, duration);
-        }
-      } else {
-        // No scheduled backflushes
-        if (lastNextScheduledTime != 0) {
-          lastNextScheduledTime = 0;
-          displayManager->showNextScheduledBackflush(0, 0);
-        }
-      }
+      displayManager->updateDisplay();
     }
   }
   

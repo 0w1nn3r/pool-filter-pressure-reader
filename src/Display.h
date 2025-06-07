@@ -24,7 +24,9 @@ private:
     WebServer* webServer;
     BackflushScheduler* scheduler;
     unsigned long lastOtaFlashTime;
+    unsigned long lastDisplayToggleTime;
     bool showOtaText;
+    bool showThreshold;
 
 public:
     Display(Adafruit_SSD1306& oled, float& pressure, float& threshold, 
@@ -46,9 +48,6 @@ public:
     
     // Show a message on the display with a title and message
     void showMessage(const String& title, const String& message);
-    
-    // Show the next scheduled backflush time
-    void showNextScheduledBackflush(time_t nextTime, unsigned int duration);
 };
 
 #endif // DISPLAY_H
