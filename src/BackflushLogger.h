@@ -18,7 +18,7 @@ struct BackflushEvent {
 class BackflushLogger {
 private:
     static const char* LOG_FILE;
-    static const size_t MAX_EVENTS = 100; // Maximum number of events to store
+    static const size_t MAX_EVENTS = 20; // Maximum number of events to store
     
     TimeManager& timeManager;
     std::vector<BackflushEvent> events;
