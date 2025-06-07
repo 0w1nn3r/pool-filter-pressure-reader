@@ -8,6 +8,7 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 - OLED display showing current pressure and WiFi status (optional - system works without display)
 - Web interface for remote monitoring with visual pressure gauge
 - Automatic backflush control with configurable threshold and duration
+- Scheduled backflush operations with support for multiple schedules
 - Backflush event logging with timestamps and pressure readings
 - NTP time synchronization for accurate timestamps
 - Pressure history logging with graphical display
@@ -145,61 +146,92 @@ The top row shows WiFi signal strength and the last two octets of the IP address
 - Option to reset WiFi settings and enter configuration mode
 - Automatically creates an access point for new WiFi setup
 
-## API Endpoints
+## Web Interface
 
-- `/` - Main web interface with pressure gauge and backflush configuration
-- `/api` - JSON API with current status and settings
-- `/backflush` - Configure backflush settings
-- `/log` - Backflush event log page with timestamp and pressure data
-- `/clearlog` - Clear the backflush event log (redirects to log page)
-- `/pressure` - Pressure history page with interactive graph
-- `/clearpressure` - Clear the pressure history data (redirects to pressure page)
-- `/wifi` - WiFi settings page to scan/select new WiFi networks, connect, or reset current configuration.
-- `/manualbackflush` - POST endpoint to trigger a manual backflush operation
-- `/stopbackflush` - POST endpoint to stop an active backflush
-- `/settings` - Device settings page for sensor configuration and software updates
-- `/ota` - POST endpoint to enable OTA updates
-- `/sensorconfig` - POST endpoint to update pressure sensor configuration
-- `/setretention` - POST endpoint to configure data retention settings
-- `/pressure.csv` - Download pressure history data in CSV format
+### Main Interface (`/`)
+- Real-time pressure gauge display
+- Current backflush configuration
+- System status and sensor readings
+- Navigation to all other sections
+
+### Backflush Management
+- `/backflush` - Configure backflush settings (threshold, duration, type)
+- `/manualbackflush` (POST) - Trigger a manual backflush operation
+- `/stopbackflush` (POST) - Stop an active backflush
+- `/log` - View backflush event history
+- `/clearlog` - Clear the backflush event log
+
+### Pressure Monitoring
+- `/pressure` - Interactive pressure history graph
+- `/pressure.csv` - Download pressure history in CSV format
+- `/clearpressure` - Clear pressure history data
+
+### System Configuration
+- `/settings` - Device settings and status
+- `/sensorconfig` (POST) - Update pressure sensor configuration
+- `/setretention` (POST) - Configure data retention settings
+- `/wifi` - WiFi network configuration
+  - Scan for available networks
+  - Connect to new networks
+  - Reset WiFi configuration
+
+### Scheduling
+- `/schedule` - Manage automated backflush schedules
+- `/scheduleupdate` (POST) - Add or update a schedule
+- `/scheduledelete` (POST) - Remove a schedule
+
+### System Updates
+- `/ota` (POST) - Enable OTA update mode
+- `/otaupload` - Web-based firmware upload interface
+
+### API Endpoints
+- `/api` - JSON API with current status and sensor readings
+  - Returns pressure, voltage, backflush status, and system info
+  - Can be used for integration with home automation systems
 
 ## Over-The-Air Updates
 
-The device supports Over-The-Air (OTA) firmware updates, allowing you to update the firmware without physically connecting to the device. Here's how to perform an update:
+The device supports multiple methods for Over-The-Air (OTA) firmware updates:
 
-### For End Users
+### Web-Based Update
+1. Navigate to the `/ota` page
+2. Click "Enable OTA Update"
+3. Use the web form to upload the new firmware file
+4. The device will automatically reboot after successful update
 
-1. Download the latest firmware file (`.bin`) from the project releases page
-2. Connect your computer to the same WiFi network as your pool filter device
-3. Open the pool filter web interface in your browser (usually at http://pool-filter.local)
-4. Go to the Settings page
-5. Click the "Enable OTA Updates" button
-6. Use one of these methods to upload the firmware within 5 minutes:
+### Using Arduino IDE
+1. Navigate to the `/ota` page and click "Enable OTA Update"
+2. In Arduino IDE, select "Tools" > "Port" > "[device_name] at [IP]"
+3. Select "Sketch" > "Upload"
 
-   #### Using ESP8266 Flasher Tool (Windows)
-   - Download [ESP8266 Flasher](https://github.com/nodemcu/nodemcu-flasher)
-   - Run the application
-   - Select the downloaded firmware file
-   - Set the address to `pool-filter.local`
-   - Click Flash
-
-   #### Using espota.py (Advanced Users)
-   ```bash
-   python3 espota.py -i pool-filter.local -p 8266 -f firmware.bin
-   ```
-
-### For Developers
-
-If you're building from source:
-
-1. Set up PlatformIO
-2. Configure `platformio.ini` with:
+### Using PlatformIO
+1. Navigate to the `/ota` page and click "Enable OTA Update"
+2. Update your `platformio.ini` with the device's IP address:
    ```ini
    upload_protocol = espota
-   upload_port = pool-filter.local
+   upload_port = [device_ip]  # or use the device's .local address (e.g., pool-filter.local)
    ```
-3. Enable OTA updates in the web interface
-4. Run `pio run -t upload`
+3. Run `pio run -t upload`
+
+### Update Notes
+- OTA updates are enabled for 5 minutes after activation
+- The device will automatically disable OTA updates after the timeout period
+- Current firmware version and update status are shown on the settings page
+- The device will automatically reboot after a successful update
+
+### Alternative Methods (Advanced)
+
+#### Using ESP8266 Flasher Tool (Windows)
+1. Download [ESP8266 Flasher](https://github.com/nodemcu/nodemcu-flasher)
+2. Run the application
+3. Select the downloaded firmware file
+4. Set the address to `pool-filter.local` or the device's IP
+5. Click Flash
+
+#### Using espota.py
+```bash
+python3 espota.py -i pool-filter.local -p 8266 -f firmware.bin
+```
 
 For security, the OTA update window is limited to 5 minutes. After this time, OTA updates will be disabled until re-enabled through the web interface.
 
