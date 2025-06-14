@@ -52,8 +52,13 @@ BackflushScheduler* scheduler;
 
 // Variables
 float currentPressure = 0.0;
-int rawADCValue = 0;      // Store the raw ADC reading
-float sensorVoltage = 0.0; // Store the voltage reading
+int rawADCValue = 0;           // Raw ADC value (0-1023)
+float sensorVoltage = 0.0;     // Voltage from pressure sensor (V)
+float smoothedPressure = 0.0;  // Smoothed pressure value (bar)
+unsigned long lastPressureUpdate = 0;  // Last pressure update time (ms)
+const unsigned long PRESSURE_UPDATE_INTERVAL = 100; // Update interval (ms)
+const float HALF_LIFE = 1.0f;  // Half-life for EMA in seconds
+float alpha = 0.0f;           // EMA alpha coefficient (will be calculated)
 unsigned long lastReadTime = 0;
 const unsigned long readInterval = 1000;  // Read pressure every 1 second
 
@@ -269,28 +274,59 @@ void loop() {
 }
 
 float readPressure() {
-  // Read analog value from pressure sensor
-  rawADCValue = analogRead(PRESSURE_PIN);
+  static bool firstReading = true;
+  unsigned long currentTime = millis();
   
-  // Convert analog reading to voltage
-  sensorVoltage = (rawADCValue / ADC_RESOLUTION) * 3.3;  // ESP8266 ADC is 3.3V reference
+  // Only process new readings at the specified interval
+  if (currentTime - lastPressureUpdate >= PRESSURE_UPDATE_INTERVAL || firstReading) {
+    // Read analog value from pressure sensor
+    rawADCValue = analogRead(PRESSURE_PIN);
+    
+    // Convert analog reading to voltage
+    sensorVoltage = (rawADCValue / ADC_RESOLUTION) * 3.3;  // ESP8266 ADC is 3.3V reference
+    
+    // Convert voltage to pressure (bar)
+    // Using linear mapping: pressure = (voltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN
+    float currentPressure = (sensorVoltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN;
+    
+    // Constrain pressure to valid range
+    currentPressure = constrain(currentPressure, PRESSURE_MIN, PRESSURE_MAX);
+    
+    // Calculate alpha based on actual time elapsed for consistent response time
+    float dt = (currentTime - lastPressureUpdate) / 1000.0f;  // Convert to seconds
+    if (firstReading || dt <= 0) {
+      dt = PRESSURE_UPDATE_INTERVAL / 1000.0f;  // Use default interval for first reading
+    }
+    
+    // Calculate alpha for EMA with specified half-life
+    // alpha = 1 - exp(-ln(2) * dt / half_life)
+    alpha = 1.0f - expf(-0.69314718f * dt / HALF_LIFE);
+    
+    // Apply EMA filter
+    if (firstReading) {
+      smoothedPressure = currentPressure;  // Initialize with first reading
+      firstReading = false;
+    } else {
+      smoothedPressure = alpha * currentPressure + (1.0f - alpha) * smoothedPressure;
+    }
+    
+    lastPressureUpdate = currentTime;
+    
+    // Debug output
+    Serial.print("Raw ADC: ");
+    Serial.print(rawADCValue);
+    Serial.print(", Voltage: ");
+    Serial.print(sensorVoltage, 3);
+    Serial.print("V, Current: ");
+    Serial.print(currentPressure, 3);
+    Serial.print(" bar, Smoothed: ");
+    Serial.print(smoothedPressure, 3);
+    Serial.print(" bar (α=");
+    Serial.print(alpha, 4);
+    Serial.println(")");
+  }
   
-  // Convert voltage to pressure (bar)
-  // Using linear mapping: pressure = (voltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN
-  float pressure = (sensorVoltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN;
-  
-  // Constrain pressure to valid range
-  pressure = constrain(pressure, PRESSURE_MIN, PRESSURE_MAX);
-  
-  Serial.print("Raw ADC: ");
-  Serial.print(rawADCValue);
-  Serial.print(", Voltage: ");
-  Serial.print(sensorVoltage);
-  Serial.print("V, Pressure: ");
-  Serial.print(pressure);
-  Serial.println(" bar");
-  
-  return pressure;
+  return smoothedPressure;
 }
 
 
