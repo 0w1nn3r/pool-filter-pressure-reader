@@ -19,9 +19,11 @@ extern const int LED_PIN;
 
 // External pressure sensor constants from main.cpp
 extern float PRESSURE_MAX;
-extern const float PRESSURE_MIN;
-extern float VOLTAGE_MIN;
-extern float VOLTAGE_MAX;
+
+// Number of calibration points (must match Settings.h)
+#ifndef NUM_CALIBRATION_POINTS
+#define NUM_CALIBRATION_POINTS 10
+#endif
 
 class WebServer {
 private:
@@ -75,6 +77,7 @@ private:
     void handleSchedulePage();
     void handleScheduleUpdate();
     void handleScheduleDelete();
+    void handleResetCalibration();
 
 public:
     WebServer(float& pressure, int& rawADC, float& voltage, float& threshold, unsigned int& duration, 

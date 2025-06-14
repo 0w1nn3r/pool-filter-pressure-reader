@@ -1,7 +1,23 @@
 #include "Settings.h"
 #include <LittleFS.h>
 
+// Default calibration points (voltage, pressure)
+const CalibrationPoint Settings::DEFAULT_CALIBRATION[NUM_CALIBRATION_POINTS] = {
+    {0.4f, 0.0f},
+    {0.54f, 0.94f},  // 0.9 bar at 0.54V
+    {0.57f, 1.0f},   // 1.0 bar at 0.57V
+    {0.63f, 1.2f},   // 1.2 bar at 0.63V
+    {0.65f, 1.3f},   // 1.3 bar at 0.65V
+    {0.68f, 1.4f},   // 1.4 bar at 0.68V
+    {0.685f, 1.5f},  // 1.5 bar at 0.685V
+    {0.715f, 1.6f},  // 1.6 bar at 0.715V
+    {0.725f, 1.7f},  // 1.7 bar at 0.725V
+    {0.78f, 2.0f}    // 2.0 bar at 0.78V
+};
+
 Settings::Settings() : initialized(false) {
+    // Initialize with default calibration
+    memcpy(calibrationTable, DEFAULT_CALIBRATION, sizeof(DEFAULT_CALIBRATION));
 }
 
 void Settings::begin() {
@@ -14,15 +30,20 @@ void Settings::begin() {
     // Open preferences with namespace "poolfilter"
     preferences.begin(NAMESPACE, false); // false = read/write mode
     initialized = true;
+    
+    // Load calibration from preferences
+    loadCalibration();
 }
 
 void Settings::setDefaults() {
     setBackflushThreshold(DEFAULT_BACKFLUSH_THRESHOLD);
     setBackflushDuration(DEFAULT_BACKFLUSH_DURATION);
     setSensorMaxPressure(DEFAULT_SENSOR_MAX_PRESSURE);
-    setVoltageMin(DEFAULT_VOLTAGE_MIN);
-    setVoltageMax(DEFAULT_VOLTAGE_MAX);
     setDataRetentionDays(DEFAULT_DATA_RETENTION_DAYS);
+    
+    // Reset to default calibration
+    memcpy(calibrationTable, DEFAULT_CALIBRATION, sizeof(DEFAULT_CALIBRATION));
+    saveCalibration();
 }
 
 void Settings::reset() {
@@ -41,36 +62,48 @@ void Settings::reset() {
     setDefaults();
 }
 
-float Settings::getVoltageMin() {
-    if (!initialized) {
-        return DEFAULT_VOLTAGE_MIN;
+// Calibration table methods
+bool Settings::setCalibrationPoint(int index, float voltage, float pressure) {
+    if (index < 0 || index >= NUM_CALIBRATION_POINTS) {
+        return false;
     }
-    return preferences.getFloat(KEY_VOLTAGE_MIN, DEFAULT_VOLTAGE_MIN);
+    
+    // Validate voltage is in ascending order
+    if (index > 0 && voltage <= calibrationTable[index-1].voltage) {
+        return false;
+    }
+    if (index < NUM_CALIBRATION_POINTS-1 && voltage >= calibrationTable[index+1].voltage) {
+        return false;
+    }
+    
+    calibrationTable[index].voltage = voltage;
+    calibrationTable[index].pressure = pressure;
+    return true;
 }
 
-float Settings::getVoltageMax() {
-    if (!initialized) {
-        return DEFAULT_VOLTAGE_MAX;
-    }
-    return preferences.getFloat(KEY_VOLTAGE_MAX, DEFAULT_VOLTAGE_MAX);
+// Save calibration to preferences
+bool Settings::saveCalibration() {
+    if (!initialized) return false;
+    
+    size_t written = preferences.putBytes(KEY_CALIBRATION, calibrationTable, 
+                                         sizeof(CalibrationPoint) * NUM_CALIBRATION_POINTS);
+    return written == sizeof(CalibrationPoint) * NUM_CALIBRATION_POINTS;
 }
 
-void Settings::setVoltageMin(float voltage) {
-    if (!initialized) {
-        return;
+// Load calibration from preferences
+bool Settings::loadCalibration() {
+    if (!initialized) return false;
+    
+    size_t size = preferences.getBytesLength(KEY_CALIBRATION);
+    if (size == sizeof(CalibrationPoint) * NUM_CALIBRATION_POINTS) {
+        size_t read = preferences.getBytes(KEY_CALIBRATION, calibrationTable, 
+                                          sizeof(CalibrationPoint) * NUM_CALIBRATION_POINTS);
+        return read == sizeof(CalibrationPoint) * NUM_CALIBRATION_POINTS;
     }
-    if (voltage > 0.1 && voltage < 3.) {  // Reasonable range for min voltage
-        preferences.putFloat(KEY_VOLTAGE_MIN, voltage);
-    }
-}
-
-void Settings::setVoltageMax(float voltage) {
-    if (!initialized) {
-        return;
-    }
-    if (voltage > 0.3 && voltage <= 5.0) {  // Reasonable range for max voltage (5V is typical for 3.3V/5V systems)
-        preferences.putFloat(KEY_VOLTAGE_MAX, voltage);
-    }
+    
+    // If no saved calibration, use defaults
+    memcpy(calibrationTable, DEFAULT_CALIBRATION, sizeof(DEFAULT_CALIBRATION));
+    return false;
 }
 
 float Settings::getBackflushThreshold() {

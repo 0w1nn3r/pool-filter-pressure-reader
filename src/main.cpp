@@ -22,12 +22,28 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Pressure Sensor Configuration
 #define PRESSURE_PIN A0  // Analog pin for pressure sensor
-const float PRESSURE_MIN = 0.0;   // Minimum pressure in bar
-float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (will be updated from settings)
-float VOLTAGE_MIN = 0.5;    // Minimum voltage output (V)
-float VOLTAGE_MAX = 3.3;    // Maximum voltage output (V)
-const float ADC_RESOLUTION = 1024.0;  // 10-bit ADC resolution
+float PRESSURE_MAX = 2.0;  // Maximum pressure in bar (will be overridden by settings)
+const float ADC_REF_VOLTAGE = 1.0f;  // 1.0V for ESP8266 ADC
+const float ADC_RESOLUTION = 1024.0f;  // 10-bit ADC resolution
 
+// Number of calibration points (must match Settings.h)
+#ifndef NUM_CALIBRATION_POINTS
+#define NUM_CALIBRATION_POINTS 10
+#endif
+
+// Default calibration table (will be overridden by settings)
+const CalibrationPoint DEFAULT_CALIBRATION[NUM_CALIBRATION_POINTS] = {
+    {0.40f, 0.0f},    // 0.0 bar at 0.40V
+    {0.54f, 0.94f},   // 0.94 bar at 0.54V
+    {0.57f, 1.0f},    // 1.0 bar at 0.57V
+    {0.63f, 1.2f},    // 1.2 bar at 0.63V
+    {0.65f, 1.3f},    // 1.3 bar at 0.65V
+    {0.68f, 1.4f},    // 1.4 bar at 0.68V
+    {0.685f, 1.5f},   // 1.5 bar at 0.685V
+    {0.715f, 1.6f},   // 1.6 bar at 0.715V
+    {0.725f, 1.7f},   // 1.7 bar at 0.725V
+    {0.78f, 2.0f}     // 2.0 bar at 0.78V
+};
 // WiFi Configuration
 #define WIFI_AP_NAME "PoolPressure-Setup"
 
@@ -274,59 +290,83 @@ void loop() {
 }
 
 float readPressure() {
-  static bool firstReading = true;
-  unsigned long currentTime = millis();
-  
-  // Only process new readings at the specified interval
-  if (currentTime - lastPressureUpdate >= PRESSURE_UPDATE_INTERVAL || firstReading) {
-    // Read analog value from pressure sensor
-    rawADCValue = analogRead(PRESSURE_PIN);
+    static bool firstReading = true;
+    static unsigned long lastReadTime = 0;
+    static float smoothedPressure = 0.0;
+    static float alpha = 0.0f;
     
-    // Convert analog reading to voltage
-    sensorVoltage = (rawADCValue / ADC_RESOLUTION) * 3.3;  // ESP8266 ADC is 3.3V reference
+    unsigned long currentTime = millis();
     
-    // Convert voltage to pressure (bar)
-    // Using linear mapping: pressure = (voltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN
-    float currentPressure = (sensorVoltage - VOLTAGE_MIN) * (PRESSURE_MAX - PRESSURE_MIN) / (VOLTAGE_MAX - VOLTAGE_MIN) + PRESSURE_MIN;
-    
-    // Constrain pressure to valid range
-    currentPressure = constrain(currentPressure, PRESSURE_MIN, PRESSURE_MAX);
-    
-    // Calculate alpha based on actual time elapsed for consistent response time
-    float dt = (currentTime - lastPressureUpdate) / 1000.0f;  // Convert to seconds
-    if (firstReading || dt <= 0) {
-      dt = PRESSURE_UPDATE_INTERVAL / 1000.0f;  // Use default interval for first reading
+    // Only process new readings at the specified interval
+    if (currentTime - lastPressureUpdate >= PRESSURE_UPDATE_INTERVAL || firstReading) {
+        // Read analog value from pressure sensor
+        rawADCValue = analogRead(PRESSURE_PIN);
+        
+        // Convert analog reading to voltage (0-1.0V for ESP8266 ADC)
+        sensorVoltage = (rawADCValue / ADC_RESOLUTION) * ADC_REF_VOLTAGE;
+        
+        // Get the calibration table from settings
+        const CalibrationPoint* calTable = settings->getCalibrationTable();
+        float currentPressure = 0.0;
+        
+        // Find the two closest calibration points
+        bool pointFound = false;
+        for (int i = 0; i < NUM_CALIBRATION_POINTS - 1; i++) {
+            if (sensorVoltage >= calTable[i].voltage && sensorVoltage <= calTable[i+1].voltage) {
+                // Found the segment where our voltage lies
+                float x0 = calTable[i].voltage;
+                float x1 = calTable[i+1].voltage;
+                float y0 = calTable[i].pressure;
+                float y1 = calTable[i+1].pressure;
+                
+                // Linear interpolation
+                currentPressure = y0 + (sensorVoltage - x0) * (y1 - y0) / (x1 - x0);
+                pointFound = true;
+                break;
+            }
+        }
+        
+        // Handle out-of-range values
+        if (!pointFound) {
+            if (sensorVoltage < calTable[0].voltage) {
+                // Below minimum voltage - use first point
+                currentPressure = calTable[0].pressure;
+            } else {
+                // Above maximum voltage - use last point
+                currentPressure = calTable[NUM_CALIBRATION_POINTS-1].pressure;
+            }
+        }
+        
+        // Calculate alpha based on time since last update for consistent smoothing
+        if (firstReading) {
+            alpha = 1.0f;  // No smoothing on first reading
+            firstReading = false;
+        } else {
+            float elapsed = (currentTime - lastReadTime) / 1000.0f;  // Convert to seconds
+            alpha = 1.0f - exp(-elapsed / HALF_LIFE * log(2.0f));
+        }
+        
+        // Apply exponential moving average filter
+        smoothedPressure = alpha * currentPressure + (1.0f - alpha) * smoothedPressure;
+        
+        // Update last read time
+        lastReadTime = currentTime;
+        lastPressureUpdate = currentTime;
+        
+        // Debug output
+        Serial.print("Raw ADC: ");
+        Serial.print(rawADCValue);
+        Serial.print(", Voltage: ");
+        Serial.print(sensorVoltage, 3);
+        Serial.print("V, Pressure: ");
+        Serial.print(currentPressure, 3);
+        Serial.print(" bar, Smoothed: ");
+        Serial.print(smoothedPressure, 3);
+        Serial.print(" bar, Alpha: ");
+        Serial.println(alpha, 4);
     }
     
-    // Calculate alpha for EMA with specified half-life
-    // alpha = 1 - exp(-ln(2) * dt / half_life)
-    alpha = 1.0f - expf(-0.69314718f * dt / HALF_LIFE);
-    
-    // Apply EMA filter
-    if (firstReading) {
-      smoothedPressure = currentPressure;  // Initialize with first reading
-      firstReading = false;
-    } else {
-      smoothedPressure = alpha * currentPressure + (1.0f - alpha) * smoothedPressure;
-    }
-    
-    lastPressureUpdate = currentTime;
-    
-    // Debug output
-    Serial.print("Raw ADC: ");
-    Serial.print(rawADCValue);
-    Serial.print(", Voltage: ");
-    Serial.print(sensorVoltage, 3);
-    Serial.print("V, Current: ");
-    Serial.print(currentPressure, 3);
-    Serial.print(" bar, Smoothed: ");
-    Serial.print(smoothedPressure, 3);
-    Serial.print(" bar (α=");
-    Serial.print(alpha, 4);
-    Serial.println(")");
-  }
-  
-  return smoothedPressure;
+    return smoothedPressure;
 }
 
 

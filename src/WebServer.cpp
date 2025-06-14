@@ -119,6 +119,7 @@ void WebServer::begin() {
         [this](){ handleOTAUpload(); }
     );
     server.on("/sensorconfig", HTTP_POST, std::bind(&WebServer::handleSensorConfig, this));
+    server.on("/resetcalibration", HTTP_POST, std::bind(&WebServer::handleResetCalibration, this));
     server.on("/setretention", HTTP_POST, std::bind(&WebServer::handleSetRetention, this));
     server.on("/pressure.csv", [this]() { handlePressureCsv(); });
     
@@ -1127,17 +1128,67 @@ void WebServer::handleSettings() {
   <meta name='viewport' content='width=device-width, initial-scale=1'>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-    .container { max-width: 800px; margin: 0 auto; }
+    .container { max-width: 1000px; margin: 0 auto; }
     h1 { color: #2c3e50; }
     .settings-form { margin: 30px 0; padding: 20px; background-color: #f5f5f5; border-radius: 10px; }
     .form-group { margin-bottom: 15px; }
     label { display: inline-block; width: 200px; text-align: right; margin-right: 10px; }
     input[type=number] { width: 80px; padding: 5px; }
-    button { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+    button { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
     .button { display: inline-block; padding: 10px 20px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; margin-top: 20px; }
     .button:hover { opacity: 0.9; }
     .status { margin-top: 10px; font-weight: bold; }
+    .calibration-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .calibration-table th, .calibration-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    .calibration-table th { background-color: #f2f2f2; }
+    .calibration-table tr:nth-child(even) { background-color: #f9f9f9; }
+    .calibration-table input { width: 80px; padding: 5px; }
   </style>
+  <script>
+    function saveSensorConfig() {
+      const form = document.getElementById('sensorForm');
+      const formData = new FormData(form);
+      
+      // Add calibration data
+      const rows = document.querySelectorAll('#calibrationTable tbody tr');
+      rows.forEach((row, index) => {
+        const voltage = row.querySelector('input[type="number"]').value;
+        const pressure = row.querySelectorAll('input[type="number"]')[1].value;
+        formData.append(`cal_v${index}`, voltage);
+        formData.append(`cal_p${index}`, pressure);
+      });
+      
+      fetch('/sensorconfig', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.text())
+      .then(message => {
+        const status = document.getElementById('configStatus');
+        status.textContent = message;
+        status.style.color = 'green';
+      })
+      .catch(error => {
+        const status = document.getElementById('configStatus');
+        status.textContent = 'Error: ' + error;
+        status.style.color = 'red';
+      });
+    }
+    
+    function resetCalibration() {
+      if (confirm('Are you sure you want to reset all calibration points to default values?')) {
+        fetch('/resetcalibration', { method: 'POST' })
+          .then(response => response.text())
+          .then(message => {
+            alert(message);
+            location.reload();
+          })
+          .catch(error => {
+            alert('Error resetting calibration: ' + error);
+          });
+      }
+    }
+  </script>
 </head>
 <body>
   <div class='container'>
@@ -1145,55 +1196,131 @@ void WebServer::handleSettings() {
     
     <div class='settings-form'>
       <h2>Pressure Sensor Configuration</h2>
-      <p>Configure your pressure sensor by setting its maximum pressure range.</p>
-      <div style='display: flex; justify-content: space-between;'>
-        <div style='flex: 1;'>
-          <form id='sensorForm'>
-            <div class='form-group'>
-              <label for='sensormax'>Maximum Pressure (bar):</label>
-              <input type='number' id='sensormax' name='sensormax' min='1.0' max='30.0' step='0.5' value=')HTML");
+      <p>Configure your pressure sensor calibration and settings.</p>
+      
+      <form id='sensorForm'>
+        <div class='form-group'>
+          <label for='sensormax'>Maximum Pressure (bar):</label>
+          <input type='number' id='sensormax' name='sensormax' min='1.0' max='30.0' step='0.5' value=')HTML");
   server.send(200, "text/html", html);
   html = String(PRESSURE_MAX, 1) + R"HTML('>
-              <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>
-            </div>
-            <div class='form-group'>
-              <label for='vmin'>Minimum Voltage (V):</label>
-              <input type='number' id='vmin' name='vmin' min='0.1' max='2.0' step='0.1' value=')HTML" + String(settings.getVoltageMin(), 1) + R"HTML('>
-              <p><small>Typically 0.5V for most sensors</small></p>
-            </div>
-            <div class='form-group'>
-              <label for='vmax'>Maximum Voltage (V):</label>
-              <input type='number' id='vmax' name='vmax' min='1.0' max='5.0' step='0.1' value=')HTML" + String(settings.getVoltageMax(), 1) + R"HTML('>
-              <p><small>Typically 3.0V for 3.3V systems, 5.0V for 5V systems</small></p>
-            </div>
-            <button type='button' onclick='saveSensorConfig()'>Save Configuration</button>
-            <p id='configStatus'></p>
-          </form>
+          <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>
         </div>
-        <div style='flex: 1; border-left: 1px solid #ddd; padding-left: 20px; margin-left: 20px;'>
-          <h3>Sensor Debug Info</h3>
-          <table style='width: 100%; border-collapse: collapse;'>
-            <tr><td style='padding: 5px 0;'><strong>Raw ADC Value:</strong></td><td>)HTML";
-  server.sendContent(html);
-  html = String(rawADCValue) + R"HTML( / 1023</td></tr>
-            <tr><td style='padding: 5px 0;'><strong>Voltage:</strong></td><td>)HTML" + String(sensorVoltage, 3) + R"HTML( V</td></tr>
-            <tr><td style='padding: 5px 0;'><strong>Pressure:</strong></td><td>)HTML" + String(currentPressure, 2) + R"HTML( bar</td></tr>
-            <tr><td style='padding: 5px 0;'><strong>Min Voltage:</strong></td><td>)HTML" + String(VOLTAGE_MIN, 2) + R"HTML( V</td></tr>
-            <tr><td style='padding: 5px 0;'><strong>Max Voltage:</strong></td><td>)HTML" + String(VOLTAGE_MAX, 2) + R"HTML( V</td></tr>
-            <tr><td style='padding: 5px 0;'><strong>Min Pressure:</strong></td><td>)HTML" + String(PRESSURE_MIN, 1) + R"HTML( bar</td></tr>
-            <tr><td style='padding: 5px 0;'><strong>Max Pressure:</strong></td><td>)HTML" + String(PRESSURE_MAX, 1);
-  server.sendContent(html);          
-  html = R"HTML( bar</td></tr>
-          </table>
-          <p><small>This information updates when you refresh the page</small></p>
+        
+        <h3>Calibration Table</h3>
+        <p>Calibrate your pressure sensor by entering voltage and corresponding pressure values.</p>
+        <table class='calibration-table' id='calibrationTable' style='width: 100%; border-collapse: collapse; margin: 15px 0;'>
+          <thead>
+            <tr style='background-color: #f2f2f2;'>
+              <th style='padding: 10px; text-align: left; border-bottom: 1px solid #ddd;'>Point</th>
+              <th style='padding: 10px; text-align: left; border-bottom: 1px solid #ddd;'>Voltage (V)</th>
+              <th style='padding: 10px; text-align: left; border-bottom: 1px solid #ddd;'>Pressure (bar)</th>
+            </tr>
+          </thead>
+          <tbody>)HTML";
+          
+  // Add calibration table rows
+  const CalibrationPoint* calTable = settings.getCalibrationTable();
+  for (int i = 0; i < NUM_CALIBRATION_POINTS; i++) {
+    String rowBg = (i % 2 == 0) ? "#fff" : "#f9f9f9";
+    html += "<tr style='background-color: " + rowBg + ";'>";
+    html += "<td style='padding: 10px; border-bottom: 1px solid #ddd;'>" + String(i+1) + "</td>";
+    
+    String voltageStr = String(calTable[i].voltage, 3);
+    String pressureStr = String(calTable[i].pressure, 1);
+    
+    html += "<td style='padding: 10px; border-bottom: 1px solid #ddd;'><input type='number' min='0' max='5' step='0.001' value='" + voltageStr + "' style='width: 100%; padding: 5px; box-sizing: border-box;'></td>";
+    html += "<td style='padding: 10px; border-bottom: 1px solid #ddd;'><input type='number' min='0' max='30' step='0.1' value='" + pressureStr + "' style='width: 100%; padding: 5px; box-sizing: border-box;'></td></tr>";
+  }
+  
+  html += R"HTML(
+          </tbody>
+        </table>
+        
+        <div style='margin: 25px 0;'>
+          <button type='button' onclick='saveSensorConfig()' style='padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;'>Save Configuration</button>
+          <button type='button' onclick='resetCalibration()' style='padding: 10px 20px; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-left: 15px;'>Reset to Default</button>
+          <span id='configStatus' style='margin-left: 20px; font-weight: bold; color: #2ecc71;'></span>
         </div>
-      </div>
+
+        <div style='margin: 30px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #3498db;'>
+          <h3 style='margin-top: 0; color: #2c3e50;'>Calibration Instructions</h3>
+          <ol style='margin-bottom: 0;'>
+            <li style='margin-bottom: 8px;'>Apply known pressures to the sensor and note the voltage readings.</li>
+            <li style='margin-bottom: 8px;'>Enter the voltage and corresponding pressure values in the table above.</li>
+            <li style='margin-bottom: 8px;'>Ensure voltage values are in ascending order (from lowest to highest).</li>
+            <li>Click 'Save Configuration' to apply the calibration settings.</li>
+          </ol>
+        </div>
+      </form>
     </div>
+
+    <div style='margin: 40px 0; background-color: #f5f5f5; padding: 25px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+      <h2 style='margin-top: 0; color: #2c3e50; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px;'>Sensor Debug Information</h2>
+      <table style='width: 100%; border-collapse: collapse; margin: 15px 0;'>
+        <tr>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Raw ADC Value:</strong></td>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>)HTML";
+          
+  server.sendContent(html);
+  html = String(rawADCValue) + " / 1023";
+  
+  html += R"HTML(</td>
+        </tr>
+        <tr>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Voltage:</strong></td>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>)HTML";
+  
+  html += String(sensorVoltage, 3) + " V";
+  
+  html += R"HTML(</td>
+        </tr>
+        <tr>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Pressure:</strong></td>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>)HTML";
+  
+  html += String(currentPressure, 2) + " bar";
+  
+  html += R"HTML(</td>
+        </tr>
+        <tr>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Min Voltage:</strong></td>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>)HTML";
+  
+  html += String(settings.getCalibrationTable()[0].voltage, 3) + " V";
+  
+  html += R"HTML(</td>
+        </tr>
+        <tr>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Max Voltage:</strong></td>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>)HTML";
+  
+  html += String(settings.getCalibrationTable()[NUM_CALIBRATION_POINTS-1].voltage, 3) + " V";
+  
+  html += R"HTML(</td>
+        </tr>
+        <tr>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Min Pressure:</strong></td>
+          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>0.0 bar</td>
+        </tr>
+        <tr>
+          <td style='padding: 10px;'><strong>Max Pressure:</strong></td>
+          <td style='padding: 10px; font-family: monospace;'>)HTML";
+  
+  html += String(PRESSURE_MAX, 1) + " bar";
+  
+  html += R"HTML(</td>
+        </tr>
+      </table>
+      <p style='margin: 15px 0 0 0; font-style: italic; color: #666; font-size: 0.9em;'>This information updates when you refresh the page</p>
+    </div>
+  </div>
 
     <div class='settings-form'>
       <h2>Software Update</h2>
       <p>Current Version: )HTML" + String(__DATE__ " " __TIME__) + R"HTML(</p>
       <p>You can update the device's software using the Over-The-Air (OTA) update feature.</p>
+{{ ... }}
       <p>Device hostname: )HTML" + String(HOSTNAME) + ".local</p>";
   server.sendContent(html);
   html = F(R"HTML(
@@ -1219,32 +1346,13 @@ void WebServer::handleSettings() {
     </div>
 <p><a href='/' class='button'>Back to Home</a></p>
 
-    <script>
-      function saveSensorConfig() {
-        var sensormax = document.getElementById('sensormax').value;
-        var vmin = document.getElementById('vmin').value;
-        var vmax = document.getElementById('vmax').value;
-        
-        var formData = new URLSearchParams();
-        formData.append('sensormax', sensormax);
-        formData.append('vmin', vmin);
-        formData.append('vmax', vmax);
-        
-        fetch('/sensorconfig', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: formData.toString()
-        })
-        .then(response => response.text())
-        .then(data => {
-          document.getElementById('configStatus').textContent = data;
-          setTimeout(() => { document.getElementById('configStatus').textContent = ''; }, 3000);
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          document.getElementById('configStatus').textContent = 'Error saving configuration';
+      </div>
+      
+      <div style='margin-top: 30px; display: flex;'>
+        <div style='flex: 1;'>
+          <h3>Sensor Debug Info</h3>
+          <table style='width: 100%; border-collapse: collapse;'>
+            <tr><td style='padding: 5px 0;'><strong>Raw ADC Value:</strong></td><td>
         });
       }
 
@@ -1277,7 +1385,6 @@ void WebServer::handleSettings() {
 
 void WebServer::handleSensorConfig() {
     String message = "Failed to update sensor settings";
-    bool updated = false;
     
     // Process sensor max pressure
     if (server.hasArg("sensormax")) {
@@ -1287,8 +1394,10 @@ void WebServer::handleSensorConfig() {
         // Validate input
         if (sensorMax >= 1.0 && sensorMax <= 30.0) {
             settings.setSensorMaxPressure(sensorMax);
+            PRESSURE_MAX = sensorMax;  // Update global variable
             message = "Sensor settings updated successfully";
-            updated = true;
+            
+            Serial.println("Max pressure updated to: " + String(sensorMax, 1) + " bar");
         } else {
             message = "Error: Invalid pressure range (1.0-30.0 bar)";
             server.send(400, "text/plain", message);
@@ -1296,65 +1405,63 @@ void WebServer::handleSensorConfig() {
         }
     }
     
-    // Process minimum voltage
-    if (server.hasArg("vmin")) {
-        String vminStr = server.arg("vmin");
-        float vmin = vminStr.toFloat();
+    // Process calibration points
+    bool calUpdated = false;
+    for (int i = 0; i < NUM_CALIBRATION_POINTS; i++) {
+        String vKey = "cal_v" + String(i);
+        String pKey = "cal_p" + String(i);
         
-        // Validate input
-        if (vmin > 0 && vmin < 5.0) {
-            settings.setVoltageMin(vmin);
-            if (!updated) {
-                message = "Sensor settings updated successfully";
-                updated = true;
+        if (server.hasArg(vKey) && server.hasArg(pKey)) {
+            float voltage = server.arg(vKey).toFloat();
+            float pressure = server.arg(pKey).toFloat();
+            
+            // Validate the calibration point
+            if (voltage < 0 || voltage > 5.0 || pressure < 0 || pressure > 30.0) {
+                message = "Error: Invalid calibration values. Voltage: 0-5V, Pressure: 0-30 bar";
+                server.send(400, "text/plain", message);
+                return;
             }
-        } else {
-            message = "Error: Invalid minimum voltage (0.1-5.0V)";
-            server.send(400, "text/plain", message);
-            return;
+            
+            // Update the calibration point
+            if (!settings.setCalibrationPoint(i, voltage, pressure)) {
+                message = "Error: Calibration points must be in ascending voltage order";
+                server.send(400, "text/plain", message);
+                return;
+            }
+            
+            calUpdated = true;
         }
     }
     
-    // Process maximum voltage
-    if (server.hasArg("vmax")) {
-        String vmaxStr = server.arg("vmax");
-        float vmax = vmaxStr.toFloat();
-        
-        // Validate input
-        if (vmax > 0 && vmax <= 5.0) {
-            settings.setVoltageMax(vmax);
-            if (!updated) {
-                message = "Sensor settings updated successfully";
-                updated = true;
+    // Save calibration if any points were updated
+    if (calUpdated) {
+        if (settings.saveCalibration()) {
+            message = "Calibration updated successfully";
+            
+            // Log the new calibration table
+            Serial.println("Calibration table updated:");
+            const CalibrationPoint* calTable = settings.getCalibrationTable();
+            for (int i = 0; i < NUM_CALIBRATION_POINTS; i++) {
+                Serial.printf("  Point %d: %.3fV -> %.1f bar\n", 
+                             i, calTable[i].voltage, calTable[i].pressure);
             }
         } else {
-            message = "Error: Invalid maximum voltage (0.1-5.0V)";
-            server.send(400, "text/plain", message);
+            message = "Error: Failed to save calibration";
+            server.send(500, "text/plain", message);
             return;
         }
-    }
-    
-    // Update the global variable if we processed a pressure update
-    if (server.hasArg("sensormax")) {
-        PRESSURE_MAX = settings.getSensorMaxPressure();
-        // Save to EEPROM if needed
-        //EEPROM.put(EEPROM_ADDR_PRESSURE_MAX, PRESSURE_MAX);
-        //EEPROM.commit();
-    }
-    
-    // Log the update
-    if (updated) {
-        Serial.println("Sensor settings updated:");
-        Serial.printf("  Max Pressure: %.1f bar\n", settings.getSensorMaxPressure());
-        Serial.printf("  Min Voltage: %.1f V\n", settings.getVoltageMin());
-        Serial.printf("  Max Voltage: %.1f V\n", settings.getVoltageMax());
-        
-        // Update the global variables if they're used elsewhere
-        VOLTAGE_MIN = settings.getVoltageMin();
-        VOLTAGE_MAX = settings.getVoltageMax();
     }
     
     server.send(200, "text/plain", message);
+}
+
+// Handle calibration reset
+void WebServer::handleResetCalibration() {
+    // Reset to default calibration by calling reset() which will reload defaults
+    settings.reset();
+    // Reload the calibration to ensure it's in memory
+    settings.loadCalibration();
+    server.send(200, "text/plain", "Calibration reset to default values");
 }
 
 void WebServer::handlePressureCsv() {
@@ -1896,11 +2003,10 @@ void WebServer::handleScheduleUpdate() {
     // Parse duration
     schedule.duration = constrain(server.arg("duration").toInt(), 5, 300);
     
-    bool success = false;
     if (isNew) {
-        success = scheduler.addSchedule(schedule);
+        scheduler.addSchedule(schedule);
     } else {
-        success = scheduler.updateSchedule(id, schedule);
+        scheduler.updateSchedule(id, schedule);
     }
     
     // Redirect back to schedule page
