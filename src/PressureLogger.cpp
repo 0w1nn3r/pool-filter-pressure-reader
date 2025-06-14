@@ -1,7 +1,7 @@
 #include "PressureLogger.h"
 
 const char* PressureLogger::LOG_FILE = "/pressure_history.json";
-const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.1f; // Record if pressure changes by 0.1 bar or more
+const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.2f; // Record if pressure changes by 0.2 bar or more
 
 PressureLogger::PressureLogger(TimeManager& tm, Settings& settings) 
     : timeManager(tm), settings(&settings), initialized(false), lastRecordedPressure(0), lastSaveTime(0) {
