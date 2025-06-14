@@ -708,7 +708,7 @@ void WebServer::handlePressureHistory() {
     <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="5">
+    <!--meta http-equiv="refresh" content="10">-->
     <title>Pool Pressure History</title>
     <link rel='stylesheet' href='/style.css'>
     <style>
@@ -747,6 +747,16 @@ void WebServer::handlePressureHistory() {
     server.sendContent(pressureLogger.getReadingsAsJson());
     server.sendContent(";\n");
     
+    // Add current pressure and time
+    unsigned long currentTime = timeManager.getCurrentTime();
+    server.sendContent("var currentPressure = " + String(currentPressure, 2) + ";\n");
+    server.sendContent("var currentTime = " + String(currentTime) + ";\n");
+    
+    // Debug logging
+    server.sendContent(F("console.log('Current pressure:', currentPressure);\n"));
+    server.sendContent(F("console.log('Current time:', new Date(currentTime * 1000));\n"));
+    server.sendContent(F("console.log('Pressure data:', JSON.stringify(pressureData, null, 2));\n"));
+    
     html = F(R"HTML(  // Check if we have data
       if (!pressureData || !pressureData.readings || pressureData.readings.length === 0) {
         document.getElementById('chart-container').innerHTML = '<p>No pressure readings recorded yet.</p>';
@@ -763,7 +773,20 @@ void WebServer::handlePressureHistory() {
           chartData.push({
             x: localTime,
             y: reading.pressure
-          });})HTML");
+          });
+        }
+        
+        // Add current pressure as a separate point if we have a valid reading
+        if (currentPressure > 0 && currentTime > 0) {
+          var now = new Date(currentTime * 1000);
+          chartData.push({
+            x: now,
+            y: currentPressure
+          });
+        }
+        
+        console.log('Chart data prepared:', chartData);
+        )HTML");
     server.sendContent(html);
 
     html = F(R"HTML(    // Create the chart
@@ -780,8 +803,9 @@ void WebServer::handlePressureHistory() {
               tension: 0.4,
               cubicInterpolationMode: 'monotone',
               borderWidth: 2,
-              pointRadius: 1.5,
-              pointHoverRadius: 3,
+              pointRadius: 2,
+              pointHoverRadius: 4,
+              pointHoverBackgroundColor: 'rgb(75, 192, 192)',
               fill: false
             }]
           },
@@ -806,7 +830,8 @@ void WebServer::handlePressureHistory() {
               }],
               yAxes: [{
                 ticks: {
-                  beginAtZero: false
+                  beginAtZero: true,
+                  min: 0
                 }
               }]
             },
@@ -1304,7 +1329,7 @@ void WebServer::handleSettings() {
 
     <div class='settings-form'>
       <h2>Software Update</h2>
-      <p>Version: <code>)HTML" + String(GIT_SHA) + R"HTML(</code></p>
+      <p>Version: <code>)HTML" + getGitSha() + R"HTML(</code></p>
       <p>Built: )HTML" + String(BUILD_DATE) + " " + String(BUILD_TIME) + R"HTML(</p>
       <p>You can update the device's software using the Over-The-Air (OTA) update feature.</p>
       <p>Device hostname: )HTML" + String(HOSTNAME) + ".local</p>";

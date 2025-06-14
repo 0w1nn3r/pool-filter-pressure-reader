@@ -58,14 +58,8 @@ A pressure monitoring system for pool filters using a NodeMCU ESP8266 and an ana
 1. Install PlatformIO IDE (VSCode extension or standalone)
 2. Clone or download this repository
 3. Open the project in PlatformIO
-4. Adjust pressure sensor calibration if needed:
-   ```cpp
-   #define PRESSURE_MIN 0.0   // Minimum pressure in bar
-   #define PRESSURE_MAX 4.0   // Maximum pressure in bar
-   #define VOLTAGE_MIN 0.5    // Minimum voltage output (V)
-   #define VOLTAGE_MAX 4.5    // Maximum voltage output (V)
-   ```
-5. Build and upload the project to your NodeMCU
+4. Build and upload the project to your NodeMCU
+5. if needed calibrate the pressue sensor by setting measuring the pressue using a separate gauge and entering the sensor voltage and pressure into the web interface at various different pressures.
 
 ## Usage
 
