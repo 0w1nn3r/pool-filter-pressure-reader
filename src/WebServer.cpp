@@ -1262,7 +1262,7 @@ void WebServer::handleSensorConfig() {
         float sensorMax = sensorMaxStr.toFloat();
         
         // Validate input
-        if (sensorMax >= 1.0 && sensorMax <= 10.0) {
+        if (sensorMax >= 1.0 && sensorMax <= 30.0) {
             // Update the setting
             settings.setSensorMaxPressure(sensorMax);
             
@@ -1274,7 +1274,7 @@ void WebServer::handleSensorConfig() {
             Serial.print("Sensor max pressure updated to: ");
             Serial.println(sensorMax);
         } else {
-            message = "Invalid sensor max pressure value. Must be between 1.0 and 10.0 bar.";
+            message = "Invalid sensor max pressure value. Must be between 1.0 and 30.0 bar.";
         }
     }
     
