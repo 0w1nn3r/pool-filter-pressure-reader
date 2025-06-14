@@ -774,7 +774,11 @@ void WebServer::handlePressureHistory() {
               data: chartData,
               backgroundColor: 'rgba(75, 192, 192, 0.2)',
               borderColor: 'rgb(75, 192, 192)',
-              tension: 0,
+              tension: 0.4,
+              cubicInterpolationMode: 'monotone',
+              borderWidth: 2,
+              pointRadius: 1.5,
+              pointHoverRadius: 3,
               fill: false
             }]
           },
