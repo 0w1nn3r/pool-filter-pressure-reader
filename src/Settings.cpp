@@ -20,6 +20,8 @@ void Settings::setDefaults() {
     setBackflushThreshold(DEFAULT_BACKFLUSH_THRESHOLD);
     setBackflushDuration(DEFAULT_BACKFLUSH_DURATION);
     setSensorMaxPressure(DEFAULT_SENSOR_MAX_PRESSURE);
+    setVoltageMin(DEFAULT_VOLTAGE_MIN);
+    setVoltageMax(DEFAULT_VOLTAGE_MAX);
     setDataRetentionDays(DEFAULT_DATA_RETENTION_DAYS);
 }
 
@@ -37,6 +39,38 @@ void Settings::reset() {
     
     // Set defaults
     setDefaults();
+}
+
+float Settings::getVoltageMin() {
+    if (!initialized) {
+        return DEFAULT_VOLTAGE_MIN;
+    }
+    return preferences.getFloat(KEY_VOLTAGE_MIN, DEFAULT_VOLTAGE_MIN);
+}
+
+float Settings::getVoltageMax() {
+    if (!initialized) {
+        return DEFAULT_VOLTAGE_MAX;
+    }
+    return preferences.getFloat(KEY_VOLTAGE_MAX, DEFAULT_VOLTAGE_MAX);
+}
+
+void Settings::setVoltageMin(float voltage) {
+    if (!initialized) {
+        return;
+    }
+    if (voltage > 0.1 && voltage < 3.) {  // Reasonable range for min voltage
+        preferences.putFloat(KEY_VOLTAGE_MIN, voltage);
+    }
+}
+
+void Settings::setVoltageMax(float voltage) {
+    if (!initialized) {
+        return;
+    }
+    if (voltage > 0.3 && voltage <= 5.0) {  // Reasonable range for max voltage (5V is typical for 3.3V/5V systems)
+        preferences.putFloat(KEY_VOLTAGE_MAX, voltage);
+    }
 }
 
 float Settings::getBackflushThreshold() {

@@ -1156,6 +1156,16 @@ void WebServer::handleSettings() {
   html = String(PRESSURE_MAX, 1) + R"HTML('>
               <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>
             </div>
+            <div class='form-group'>
+              <label for='vmin'>Minimum Voltage (V):</label>
+              <input type='number' id='vmin' name='vmin' min='0.1' max='2.0' step='0.1' value=')HTML" + String(settings.getVoltageMin(), 1) + R"HTML('>
+              <p><small>Typically 0.5V for most sensors</small></p>
+            </div>
+            <div class='form-group'>
+              <label for='vmax'>Maximum Voltage (V):</label>
+              <input type='number' id='vmax' name='vmax' min='1.0' max='5.0' step='0.1' value=')HTML" + String(settings.getVoltageMax(), 1) + R"HTML('>
+              <p><small>Typically 3.0V for 3.3V systems, 5.0V for 5V systems</small></p>
+            </div>
             <button type='button' onclick='saveSensorConfig()'>Save Configuration</button>
             <p id='configStatus'></p>
           </form>
@@ -1211,23 +1221,30 @@ void WebServer::handleSettings() {
 
     <script>
       function saveSensorConfig() {
-        const sensormax = document.getElementById('sensormax').value;
-        const status = document.getElementById('configStatus');
+        var sensormax = document.getElementById('sensormax').value;
+        var vmin = document.getElementById('vmin').value;
+        var vmax = document.getElementById('vmax').value;
+        
+        var formData = new URLSearchParams();
+        formData.append('sensormax', sensormax);
+        formData.append('vmin', vmin);
+        formData.append('vmax', vmax);
         
         fetch('/sensorconfig', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'sensormax=' + sensormax
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
         })
         .then(response => response.text())
         .then(data => {
-          status.textContent = data;
-          status.style.color = 'green';
-          setTimeout(() => { status.textContent = ''; }, 3000);
+          document.getElementById('configStatus').textContent = data;
+          setTimeout(() => { document.getElementById('configStatus').textContent = ''; }, 3000);
         })
         .catch(error => {
-          status.textContent = 'Error: ' + error;
-          status.style.color = 'red';
+          console.error('Error:', error);
+          document.getElementById('configStatus').textContent = 'Error saving configuration';
         });
       }
 
@@ -1260,29 +1277,83 @@ void WebServer::handleSettings() {
 
 void WebServer::handleSensorConfig() {
     String message = "Failed to update sensor settings";
+    bool updated = false;
     
+    // Process sensor max pressure
     if (server.hasArg("sensormax")) {
         String sensorMaxStr = server.arg("sensormax");
         float sensorMax = sensorMaxStr.toFloat();
         
         // Validate input
         if (sensorMax >= 1.0 && sensorMax <= 30.0) {
-            // Update the setting
             settings.setSensorMaxPressure(sensorMax);
-            
-            // Update the global variable
-            PRESSURE_MAX = sensorMax;
-            
-            message = "Sensor max pressure updated to: " + String(sensorMax, 1) + " bar";
-            
-            Serial.print("Sensor max pressure updated to: ");
-            Serial.println(sensorMax);
+            message = "Sensor settings updated successfully";
+            updated = true;
         } else {
-            message = "Invalid sensor max pressure value. Must be between 1.0 and 30.0 bar.";
+            message = "Error: Invalid pressure range (1.0-30.0 bar)";
+            server.send(400, "text/plain", message);
+            return;
         }
     }
     
-    // Return JSON response instead of redirecting
+    // Process minimum voltage
+    if (server.hasArg("vmin")) {
+        String vminStr = server.arg("vmin");
+        float vmin = vminStr.toFloat();
+        
+        // Validate input
+        if (vmin > 0 && vmin < 5.0) {
+            settings.setVoltageMin(vmin);
+            if (!updated) {
+                message = "Sensor settings updated successfully";
+                updated = true;
+            }
+        } else {
+            message = "Error: Invalid minimum voltage (0.1-5.0V)";
+            server.send(400, "text/plain", message);
+            return;
+        }
+    }
+    
+    // Process maximum voltage
+    if (server.hasArg("vmax")) {
+        String vmaxStr = server.arg("vmax");
+        float vmax = vmaxStr.toFloat();
+        
+        // Validate input
+        if (vmax > 0 && vmax <= 5.0) {
+            settings.setVoltageMax(vmax);
+            if (!updated) {
+                message = "Sensor settings updated successfully";
+                updated = true;
+            }
+        } else {
+            message = "Error: Invalid maximum voltage (0.1-5.0V)";
+            server.send(400, "text/plain", message);
+            return;
+        }
+    }
+    
+    // Update the global variable if we processed a pressure update
+    if (server.hasArg("sensormax")) {
+        PRESSURE_MAX = settings.getSensorMaxPressure();
+        // Save to EEPROM if needed
+        //EEPROM.put(EEPROM_ADDR_PRESSURE_MAX, PRESSURE_MAX);
+        //EEPROM.commit();
+    }
+    
+    // Log the update
+    if (updated) {
+        Serial.println("Sensor settings updated:");
+        Serial.printf("  Max Pressure: %.1f bar\n", settings.getSensorMaxPressure());
+        Serial.printf("  Min Voltage: %.1f V\n", settings.getVoltageMin());
+        Serial.printf("  Max Voltage: %.1f V\n", settings.getVoltageMax());
+        
+        // Update the global variables if they're used elsewhere
+        VOLTAGE_MIN = settings.getVoltageMin();
+        VOLTAGE_MAX = settings.getVoltageMax();
+    }
+    
     server.send(200, "text/plain", message);
 }
 

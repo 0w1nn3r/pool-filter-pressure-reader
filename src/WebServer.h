@@ -20,8 +20,8 @@ extern const int LED_PIN;
 // External pressure sensor constants from main.cpp
 extern float PRESSURE_MAX;
 extern const float PRESSURE_MIN;
-extern const float VOLTAGE_MIN;
-extern const float VOLTAGE_MAX;
+extern float VOLTAGE_MIN;
+extern float VOLTAGE_MAX;
 
 class WebServer {
 private:

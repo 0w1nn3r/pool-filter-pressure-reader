@@ -24,8 +24,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define PRESSURE_PIN A0  // Analog pin for pressure sensor
 const float PRESSURE_MIN = 0.0;   // Minimum pressure in bar
 float PRESSURE_MAX = 4.0;  // Maximum pressure in bar (will be updated from settings)
-const float VOLTAGE_MIN = 0.5;    // Minimum voltage output (V)
-const float VOLTAGE_MAX = 3.3;    // Maximum voltage output (V)
+float VOLTAGE_MIN = 0.5;    // Minimum voltage output (V)
+float VOLTAGE_MAX = 3.3;    // Maximum voltage output (V)
 const float ADC_RESOLUTION = 1024.0;  // 10-bit ADC resolution
 
 // WiFi Configuration

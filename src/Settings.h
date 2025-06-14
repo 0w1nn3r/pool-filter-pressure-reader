@@ -13,6 +13,8 @@ private:
     static constexpr float DEFAULT_BACKFLUSH_THRESHOLD = 2.0f;
     static constexpr unsigned int DEFAULT_BACKFLUSH_DURATION = 30;
     static constexpr float DEFAULT_SENSOR_MAX_PRESSURE = 4.0f;
+    static constexpr float DEFAULT_VOLTAGE_MIN = 0.5f;
+    static constexpr float DEFAULT_VOLTAGE_MAX = 3.0f;
     static constexpr unsigned int DEFAULT_DATA_RETENTION_DAYS = 7;
     
     // Namespace and keys
@@ -20,6 +22,8 @@ private:
     static constexpr const char* KEY_THRESHOLD = "threshold";
     static constexpr const char* KEY_DURATION = "duration";
     static constexpr const char* KEY_SENSOR_MAX = "sensormax";
+    static constexpr const char* KEY_VOLTAGE_MIN = "vmin";
+    static constexpr const char* KEY_VOLTAGE_MAX = "vmax";
     static constexpr const char* KEY_RETENTION_DAYS = "retdays";
     
     void setDefaults();
@@ -34,10 +38,14 @@ public:
     float getBackflushThreshold();
     unsigned int getBackflushDuration();
     float getSensorMaxPressure();
+    float getVoltageMin();
+    float getVoltageMax();
     unsigned int getDataRetentionDays();
     void setBackflushThreshold(float threshold);
     void setBackflushDuration(unsigned int duration);
     void setSensorMaxPressure(float maxPressure);
+    void setVoltageMin(float voltage);
+    void setVoltageMax(float voltage);
     void setDataRetentionDays(unsigned int days);
 };
 
