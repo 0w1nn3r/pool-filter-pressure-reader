@@ -1230,8 +1230,8 @@ void WebServer::handleSettings() {
     String voltageStr = String(calTable[i].voltage, 3);
     String pressureStr = String(calTable[i].pressure, 1);
     
-    html += "<td style='padding: 10px; border-bottom: 1px solid #ddd;'><input type='number' min='0' max='5' step='0.001' value='" + voltageStr + "' style='width: 100%; padding: 5px; box-sizing: border-box;'></td>";
-    html += "<td style='padding: 10px; border-bottom: 1px solid #ddd;'><input type='number' min='0' max='30' step='0.1' value='" + pressureStr + "' style='width: 100%; padding: 5px; box-sizing: border-box;'></td></tr>";
+    html += "<td style='padding: 5px 8px; border-bottom: 1px solid #ddd;'><input type='number' min='0' max='5' step='0.001' value='" + voltageStr + "' style='width: 80px; padding: 4px; box-sizing: border-box;'></td>";
+    html += "<td style='padding: 5px 8px; border-bottom: 1px solid #ddd;'><input type='number' min='0' max='30' step='0.1' value='" + pressureStr + "' style='width: 70px; padding: 4px; box-sizing: border-box;'></td></tr>";
   }
   
   html += R"HTML(
@@ -1349,13 +1349,7 @@ void WebServer::handleSettings() {
 
       </div>
       
-      <div style='margin-top: 30px; display: flex;'>
-        <div style='flex: 1;'>
-          <h3>Sensor Debug Info</h3>
-          <table style='width: 100%; border-collapse: collapse;'>
-            <tr><td style='padding: 5px 0;'><strong>Raw ADC Value:</strong></td><td>
-        });
-      }
+      <script>
 
       function enableOTA() {
         const status = document.getElementById('otaStatus');

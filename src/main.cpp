@@ -33,16 +33,16 @@ const float ADC_RESOLUTION = 1024.0f;  // 10-bit ADC resolution
 
 // Default calibration table (will be overridden by settings)
 const CalibrationPoint DEFAULT_CALIBRATION[NUM_CALIBRATION_POINTS] = {
-    {0.40f, 0.0f},    // 0.0 bar at 0.40V
-    {0.54f, 0.94f},   // 0.94 bar at 0.54V
-    {0.57f, 1.0f},    // 1.0 bar at 0.57V
-    {0.63f, 1.2f},    // 1.2 bar at 0.63V
-    {0.65f, 1.3f},    // 1.3 bar at 0.65V
-    {0.68f, 1.4f},    // 1.4 bar at 0.68V
-    {0.685f, 1.5f},   // 1.5 bar at 0.685V
-    {0.715f, 1.6f},   // 1.6 bar at 0.715V
-    {0.725f, 1.7f},   // 1.7 bar at 0.725V
-    {0.78f, 2.0f}     // 2.0 bar at 0.78V
+    {0.112f, 0.0f},    // 0.0 bar at 0.112V
+    {0.170f, 0.9f},   // 0.9 bar at 0.170V
+    {0.177f, 1.0f},    // 1.0 bar at 0.177V
+    {0.190f, 1.1f},    // 1.1 bar at 0.190V
+    {0.200f, 1.2f},    // 1.2 bar at 0.200V
+    {0.206f, 1.3f},    // 1.3 bar at 0.206V
+    {0.210f, 1.4f},   // 1.4 bar at 0.210V
+    {0.214f, 1.5f},   // 1.5 bar at 0.214V
+    {0.219f, 1.6f},   // 1.6 bar at 0.219V
+    {0.240f, 2.0f}     // 2.0 bar at 0.78V
 };
 // WiFi Configuration
 #define WIFI_AP_NAME "PoolPressure-Setup"
