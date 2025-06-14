@@ -1,4 +1,5 @@
 #include "WebServer.h"
+#include "version.h"
 
 extern "C" {
   #include "user_interface.h"
@@ -1210,7 +1211,7 @@ void WebServer::handleSettings() {
         
         <h3>Calibration Table</h3>
         <p>Calibrate your pressure sensor by entering voltage and corresponding pressure values.</p>
-        <table class='calibration-table' id='calibrationTable' style='width: 100%; border-collapse: collapse; margin: 15px 0;'>
+        <table class='calibration-table' id='calibrationTable' style='width: auto; border-collapse: collapse; margin: 15px 0;'>
           <thead>
             <tr style='background-color: #f2f2f2;'>
               <th style='padding: 10px; text-align: left; border-bottom: 1px solid #ddd;'>Point</th>
@@ -1285,22 +1286,6 @@ void WebServer::handleSettings() {
   html += R"HTML(</td>
         </tr>
         <tr>
-          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Min Voltage:</strong></td>
-          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>)HTML";
-  
-  html += String(settings.getCalibrationTable()[0].voltage, 3) + " V";
-  
-  html += R"HTML(</td>
-        </tr>
-        <tr>
-          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Max Voltage:</strong></td>
-          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>)HTML";
-  
-  html += String(settings.getCalibrationTable()[NUM_CALIBRATION_POINTS-1].voltage, 3) + " V";
-  
-  html += R"HTML(</td>
-        </tr>
-        <tr>
           <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Min Pressure:</strong></td>
           <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>0.0 bar</td>
         </tr>
@@ -1319,9 +1304,9 @@ void WebServer::handleSettings() {
 
     <div class='settings-form'>
       <h2>Software Update</h2>
-      <p>Current Version: )HTML" + String(__DATE__ " " __TIME__) + R"HTML(</p>
+      <p>Version: <code>)HTML" + String(GIT_SHA) + R"HTML(</code></p>
+      <p>Built: )HTML" + String(BUILD_DATE) + " " + String(BUILD_TIME) + R"HTML(</p>
       <p>You can update the device's software using the Over-The-Air (OTA) update feature.</p>
-{{ ... }}
       <p>Device hostname: )HTML" + String(HOSTNAME) + ".local</p>";
   server.sendContent(html);
   html = F(R"HTML(
