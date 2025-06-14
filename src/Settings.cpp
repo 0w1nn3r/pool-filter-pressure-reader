@@ -91,7 +91,7 @@ void Settings::setSensorMaxPressure(float maxPressure) {
         return;
     }
     
-    if (maxPressure >= 1.0 && maxPressure <= 10.0) {  // 1 to 10 bar range for sensors
+    if (maxPressure >= 1.0 && maxPressure <= 30.0) {  // 1 to 30 bar range for sensors
         preferences.putFloat(KEY_SENSOR_MAX, maxPressure);
     }
 }

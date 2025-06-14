@@ -1147,7 +1147,7 @@ void WebServer::handleSettings() {
           <form id='sensorForm'>
             <div class='form-group'>
               <label for='sensormax'>Maximum Pressure (bar):</label>
-              <input type='number' id='sensormax' name='sensormax' min='1.0' max='10.0' step='0.5' value=')HTML");
+              <input type='number' id='sensormax' name='sensormax' min='1.0' max='30.0' step='0.5' value=')HTML");
   server.send(200, "text/html", html);
   html = String(PRESSURE_MAX, 1) + R"HTML('>
               <p><small>Common values: 4.0 bar, 6.0 bar, 10.0 bar depending on your sensor type</small></p>
