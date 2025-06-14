@@ -83,7 +83,7 @@ void setup() {
   
   // Initialize relay pin
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, HIGH);  // Ensure relay is off at startup
+  digitalWrite(RELAY_PIN, LOW);  // Ensure relay is off at startup
   
   // Initialize onboard LED
   pinMode(LED_PIN, OUTPUT);
@@ -351,7 +351,7 @@ void handleBackflush() {
       currentBackflushType = "Manual";
     }
     
-    digitalWrite(RELAY_PIN, LOW);  // Activate relay
+    digitalWrite(RELAY_PIN, HIGH);  // Activate relay
     digitalWrite(LED_PIN, LOW);    // Turn LED ON (inverse logic on NodeMCU)
     
     // Log the backflush event
@@ -389,7 +389,7 @@ void handleBackflush() {
     if (elapsedTime >= backflushDuration) {
       // Stop backflush
       backflushActive = false;
-      digitalWrite(RELAY_PIN, HIGH);  // Deactivate relay
+      digitalWrite(RELAY_PIN, LOW);  // Deactivate relay
       digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
       Serial.println("Backflush completed");
       

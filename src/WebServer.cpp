@@ -1099,7 +1099,7 @@ void WebServer::handleStopBackflush() {
     needManualBackflush = false;
     
     // Turn off relay and LED
-    digitalWrite(RELAY_PIN, HIGH);  // Deactivate relay
+    digitalWrite(RELAY_PIN, LOW);  // Deactivate relay
     digitalWrite(LED_PIN, HIGH);   // Turn LED OFF (inverse logic on NodeMCU)
     Serial.println("Manual backflush stopped");
     
