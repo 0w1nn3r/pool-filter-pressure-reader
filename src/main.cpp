@@ -13,6 +13,12 @@
 #include "PressureLogger.h"
 #include "BackflushScheduler.h"
 
+#ifdef GIT_SHA_STR
+  #pragma message("GIT_SHA_STR is defined as: " GIT_SHA_STR)
+#else
+  #pragma message("GIT_SHA_STR is NOT defined")
+#endif
+
 // OLED Display Configuration
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
