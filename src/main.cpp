@@ -432,6 +432,7 @@ void handleBackflush() {
     
     // Log the backflush event
     backflushLogger->logEvent(backflushTriggerPressure, backflushDuration, currentBackflushType);
+    pressureLogger->addReading(backflushTriggerPressure, true);
     
     // Log to serial
     Serial.println("\n=== BACKFLUSH STARTED ===");

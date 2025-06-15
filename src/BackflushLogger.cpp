@@ -146,10 +146,11 @@ String BackflushLogger::getEventsAsJson() {
         // Format date and time
         char dateTime[20];
         time_t t = event.timestamp;
-        struct tm* timeinfo = localtime(&t);
-        sprintf(dateTime, "%04d-%02d-%02d %02d:%02d:%02d",
-                timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday,
-                timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+        time_t localt = timeManager.gmtToLocal(t);
+        struct tm* timeinfo = localtime(&localt);
+
+        strftime(dateTime, sizeof(dateTime), "%Y-%m-%d %H:%M:%S", timeinfo);
+        
         eventObj["datetime"] = String(dateTime);
         
         eventObj["pressure"] = event.pressure;
@@ -181,7 +182,8 @@ String BackflushLogger::getEventsAsHtml() {
               });
     
     for (const BackflushEvent& event : sortedEvents) {
-        time_t t = event.timestamp;
+        time_t t = timeManager.gmtToLocal(event.timestamp);
+        
         struct tm* timeinfo = localtime(&t);
         
         char date[11];

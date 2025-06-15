@@ -748,15 +748,10 @@ void WebServer::handlePressureHistory() {
     server.sendContent(";\n");
     
     // Add current pressure and time
-    unsigned long currentTime = timeManager.getCurrentTime();
+    unsigned long localTime = timeManager.getCurrentTime();
     server.sendContent("var currentPressure = " + String(currentPressure, 2) + ";\n");
-    server.sendContent("var currentTime = " + String(currentTime) + ";\n");
-    
-    // Debug logging
-    server.sendContent(F("console.log('Current pressure:', currentPressure);\n"));
-    server.sendContent(F("console.log('Current time:', new Date(currentTime * 1000));\n"));
-    server.sendContent(F("console.log('Pressure data:', JSON.stringify(pressureData, null, 2));\n"));
-    
+    server.sendContent("var currentTime = " + String(localTime) + ";\n");
+      
     html = F(R"HTML(  // Check if we have data
       if (!pressureData || !pressureData.readings || pressureData.readings.length === 0) {
         document.getElementById('chart-container').innerHTML = '<p>No pressure readings recorded yet.</p>';
@@ -778,9 +773,11 @@ void WebServer::handlePressureHistory() {
         
         // Add current pressure as a separate point if we have a valid reading
         if (currentPressure > 0 && currentTime > 0) {
-          var now = new Date(currentTime * 1000);
+          // Create date in UTC (same as historical data)
+          var nowLocal = new Date(currentTime * 1000);
+          
           chartData.push({
-            x: now,
+            x: nowLocal,
             y: currentPressure
           });
         }
@@ -817,9 +814,17 @@ void WebServer::handlePressureHistory() {
                 type: 'time',
                 time: {
                   displayFormats: {
-                    hour: 'MMM D, HH:mm'
+                    hour: 'MMM D, HH:mm',
+                    day: 'MMM D, HH:mm',
+                    week: 'MMM D',
+                    month: 'MMM D',
+                    quarter: 'MMM D',
+                    year: 'MMM D'
                   },
-                  timezone: 'Europe/Paris'
+                  // Use browser's local timezone
+                  tooltipFormat: 'MMM D, HH:mm',
+                  unit: 'minute',
+                  unitStepSize: 15
                 },
                 ticks: {
                   maxRotation: 45,

@@ -35,7 +35,7 @@ public:
     PressureLogger(TimeManager& tm, Settings& settings);
     
     void begin();
-    void addReading(float pressure);
+    void addReading(float pressure, bool force = false);
     void addReadingWithTimestamp(const PressureReading& reading); // Add reading with explicit timestamp
     bool saveReadings(); // Made public for forced saves
     void update(); // Call this regularly to check if we need to save

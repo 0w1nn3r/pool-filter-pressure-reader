@@ -1,7 +1,7 @@
 #include "PressureLogger.h"
 
 const char* PressureLogger::LOG_FILE = "/pressure_history.json";
-const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.2f; // Record if pressure changes by 0.2 bar or more
+const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.15f; // Record if pressure changes by 0.15 bar or more
 
 PressureLogger::PressureLogger(TimeManager& tm, Settings& settings) 
     : timeManager(tm), settings(&settings), initialized(false), lastRecordedPressure(0), lastSaveTime(0) {
@@ -109,7 +109,7 @@ bool PressureLogger::saveReadings() {
     return true;
 }
 
-void PressureLogger::addReading(float pressure) {
+void PressureLogger::addReading(float pressure, bool force) {
     // Check if initialized and time is properly initialized
     if (!initialized || !timeManager.isTimeInitialized()) {
         return;
@@ -119,7 +119,9 @@ void PressureLogger::addReading(float pressure) {
     time_t currentGMTTime = timeManager.getCurrentGMTTime();
     
     // Only record if pressure has changed significantly or it's the first reading
-    if (readings.empty() || abs(pressure - lastRecordedPressure) >= PRESSURE_CHANGE_THRESHOLD) {
+    if (readings.empty() 
+        || abs(pressure - lastRecordedPressure) >= PRESSURE_CHANGE_THRESHOLD
+        || force) {
         // Ensure we have a valid timestamp (after Jan 1, 2021)
         if (currentGMTTime < 1609459200) { // Jan 1, 2021 timestamp
             Serial.println("Invalid timestamp for pressure reading");
