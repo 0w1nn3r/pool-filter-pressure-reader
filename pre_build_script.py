@@ -1,58 +1,72 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+"""
+Pre-build script for PlatformIO to generate version.h with git SHA and build timestamp.
+"""
 import subprocess
 import os
 import sys
 from datetime import datetime
 
-def has_uncommitted_changes():
+def run_command(cmd, cwd=None):
+    """Run a shell command and return its output."""
     try:
-        # Check for uncommitted changes (returns non-empty string if there are changes)
-        changes = subprocess.check_output(
-            ['git', 'status', '--porcelain'],
-            stderr=subprocess.PIPE
-        ).decode('ascii').strip()
-        return bool(changes)
-    except (subprocess.SubprocessError, OSError) as e:
-        print(f"Error checking git status: {e}", file=sys.stderr)
-        return False
+        result = subprocess.run(
+            cmd,
+            cwd=cwd or os.getcwd(),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed: {' '.join(cmd)}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
+        print(f"Output: {e.output}", file=sys.stderr)
+        print(f"Stderr: {e.stderr}", file=sys.stderr)
+        return None
+
+def has_uncommitted_changes():
+    """Check if there are uncommitted changes in the git repository."""
+    output = run_command(['git', 'status', '--porcelain'])
+    return bool(output) if output is not None else False
 
 def get_git_sha():
-    try:
-        # Check for uncommitted changes first
-        if has_uncommitted_changes():
-            return 'unchecked'  # Special value to indicate uncommitted changes
-            
-        # If no uncommitted changes, get the SHA from git
-        sha = subprocess.check_output(
-            ['git', 'rev-parse', '--short=7', 'HEAD'],
-            stderr=subprocess.PIPE
-        ).decode('ascii').strip()
+    """Get the git SHA of the current commit."""
+    if has_uncommitted_changes():
+        return 'unchecked'
+    
+    sha = run_command(['git', 'rev-parse', '--short=7', 'HEAD'])
+    if sha:
         return sha
-    except (subprocess.SubprocessError, OSError) as e:
-        print(f"Error getting git SHA: {e}", file=sys.stderr)
-        # Fallback: if .git_sha file exists, use that
-        if os.path.exists('.git_sha'):
-            try:
-                with open('.git_sha', 'r') as f:
-                    return f.read().strip()
-            except Exception as e:
-                print(f"Error reading .git_sha: {e}", file=sys.stderr)
-        return 'unknown'
+        
+    # Fallback to .git_sha file if git command fails
+    git_sha_file = os.path.join(os.path.dirname(__file__), '.git_sha')
+    if os.path.exists(git_sha_file):
+        try:
+            with open(git_sha_file, 'r') as f:
+                return f.read().strip()
+        except Exception as e:
+            print(f"Error reading {git_sha_file}: {e}", file=sys.stderr)
+    
+    return 'unknown'
 
 def generate_version_h(git_sha):
     # Get current date and time
     now = datetime.now()
-    build_date = now.strftime("%b %d %Y")  # e.g. "Jun 15 2023"
-    build_time = now.strftime("%H:%M:%S")   # e.g. "14:30:45"
+    build_date = now.strftime("%b %d %Y")
+    build_time = now.strftime("%H:%M:%S")
     
-    # Determine the display string
+    # Determine what to display
     if git_sha == 'unchecked':
         display_sha = 'built from unchecked-in code'
+    elif git_sha == 'unknown':
+        display_sha = 'unknown (not a git repository)'
     else:
         display_sha = git_sha
     
     # Generate the version.h content
-    content = f'''#ifndef VERSION_H
+    content = """#ifndef VERSION_H
 #define VERSION_H
 
 #include <Arduino.h>
@@ -75,8 +89,15 @@ inline String getGitSha() {{
     return String(GIT_SHA_DISPLAY);
 }}
 
-#endif // VERSION_H
-'''
+#endif // VERSION_H""".format(
+        git_sha=git_sha,
+        display_sha=display_sha,
+        build_date=build_date,
+        build_time=build_time
+    )
+    
+    # Ensure the src directory exists
+    os.makedirs('src', exist_ok=True)
     
     # Write to version.h
     version_h_path = os.path.join('src', 'version.h')
@@ -84,20 +105,15 @@ inline String getGitSha() {{
         f.write(content)
     
     print(f"Generated {version_h_path} with SHA: {display_sha}")
+    
+    # Also write the SHA to .git_sha for future reference
+    with open('.git_sha', 'w') as f:
+        f.write(git_sha)
 
 def main():
-    # Get Git SHA
+    print("Running pre-build script...")
     git_sha = get_git_sha()
-    
-    # Generate version.h
     generate_version_h(git_sha)
-    
-    # Also write it to .git_sha for reference
-    try:
-        with open('.git_sha', 'w') as f:
-            f.write(git_sha)
-    except Exception as e:
-        print(f"Error writing .git_sha: {e}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

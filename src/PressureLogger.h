@@ -17,7 +17,7 @@ struct PressureReading {
 class PressureLogger {
 private:
     static const char* LOG_FILE;
-    static const size_t MAX_READINGS = 1440; // Store up to 24 hours of readings at 1-minute intervals
+    static const size_t MAX_READINGS = 500; 
     static const float PRESSURE_CHANGE_THRESHOLD; // Record if pressure changes by this amount
     
     TimeManager& timeManager;
@@ -42,6 +42,9 @@ public:
     
     // Get readings for web display
     String getReadingsAsJson();
+    
+    // Get paginated readings for web display
+    String getPaginatedReadingsAsJson(int page, int limit, int& totalPages);
     
     // Clear all readings
     bool clearReadings();

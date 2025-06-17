@@ -1,7 +1,7 @@
 #include "PressureLogger.h"
 
 const char* PressureLogger::LOG_FILE = "/pressure_history.json";
-const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.15f; // Record if pressure changes by 0.15 bar or more
+const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.17f; // Record if pressure changes by 0.15 bar or more
 
 PressureLogger::PressureLogger(TimeManager& tm, Settings& settings) 
     : timeManager(tm), settings(&settings), initialized(false), lastRecordedPressure(0), lastSaveTime(0) {
@@ -219,12 +219,30 @@ void PressureLogger::pruneOldData() {
 }
 
 String PressureLogger::getReadingsAsJson() {
+    // For backward compatibility, return all readings
+    int totalPages = 1;
+    return getPaginatedReadingsAsJson(1, readings.size(), totalPages);
+}
+
+String PressureLogger::getPaginatedReadingsAsJson(int page, int limit, int& totalPages) {
     // Create JSON document
     JsonDocument doc;
     JsonArray readingsArray = doc["readings"].to<JsonArray>();
     
-    // Add readings to JSON
-    for (const PressureReading& reading : readings) {
+    // Calculate pagination values
+    int totalReadings = readings.size();
+    totalPages = (totalReadings + limit - 1) / limit; // Ceiling division
+    
+    // Ensure page is within valid range
+    page = max(1, min(page, totalPages));
+    
+    // Calculate start and end indices
+    int startIdx = (page - 1) * limit;
+    int endIdx = min(startIdx + limit, totalReadings);
+    
+    // Add paginated readings to JSON
+    for (int i = startIdx; i < endIdx; i++) {
+        const PressureReading& reading = readings[i];
         JsonObject readingObj = readingsArray.add<JsonObject>();
         readingObj["time"] = reading.timestamp;
         readingObj["pressure"] = reading.pressure;
@@ -240,6 +258,11 @@ String PressureLogger::getReadingsAsJson() {
         strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", timeinfo);
         readingObj["dateStr"] = String(dateStr);
     }
+    
+    // Add pagination info
+    doc["currentPage"] = page;
+    doc["totalPages"] = totalPages;
+    doc["totalReadings"] = totalReadings;
     
     String jsonString;
     serializeJson(doc, jsonString);

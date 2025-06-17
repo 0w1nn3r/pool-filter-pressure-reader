@@ -123,6 +123,7 @@ void WebServer::begin() {
     server.on("/resetcalibration", HTTP_POST, std::bind(&WebServer::handleResetCalibration, this));
     server.on("/setretention", HTTP_POST, std::bind(&WebServer::handleSetRetention, this));
     server.on("/pressure.csv", [this]() { handlePressureCsv(); });
+    server.on("/api/pressure/readings", HTTP_GET, [this]() { handlePressureReadingsApi(); });
     
     server.begin();
     Serial.println("HTTP server started");
@@ -715,11 +716,9 @@ void WebServer::handlePressureHistory() {
     #chart-container { width: 100%; height: 300px; margin: 20px 0; }
         .info { font-size: 14px; color: #666; margin-top: 40px; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/min/moment.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@0.1.2/dist/chartjs-adapter-moment.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
     </head>
     <body>
     <h1>Pool Pressure History</h1>)HTML");
@@ -742,187 +741,390 @@ void WebServer::handlePressureHistory() {
     html += "</div>\n";
     server.sendContent(html);
     
-    // Add JavaScript for chart
-    server.sendContent("<script>var pressureData = ");
-    server.sendContent(pressureLogger.getReadingsAsJson());
-    server.sendContent(";\n");
+    // Add JavaScript for chart with streaming data
+    server.sendContent("<script>");
+    server.sendContent("var pressureData = [];\n");
     
     // Add current pressure and time
     unsigned long localTime = timeManager.getCurrentTime();
     server.sendContent("var currentPressure = " + String(currentPressure, 2) + ";\n");
     server.sendContent("var currentTime = " + String(localTime) + ";\n");
+    
+    // Add loading indicator and chart update function
+    server.sendContent(F(R"HTML(
+      var loading = true;
+      var pressureChart = null;
       
-    html = F(R"HTML(  // Check if we have data
-      if (!pressureData || !pressureData.readings || pressureData.readings.length === 0) {
-        document.getElementById('chart-container').innerHTML = '<p>No pressure readings recorded yet.</p>';
-      } else {
-        // Prepare data for Chart.js
-        var chartData = [];
-        // Sort data by timestamp
-        pressureData.readings.sort(function(a, b) { return a.time - b.time; });
-        // Process each reading
-        for (var i = 0; i < pressureData.readings.length; i++) {
-          var reading = pressureData.readings[i];
-          // Convert UTC timestamp to local time using detected timezone
-          var localTime = new Date(reading.time * 1000);
-          chartData.push({
-            x: localTime,
-            y: reading.pressure
-          });
+      // Function to update the chart with current data
+      function updateChart() {
+        // Only update if we have data and not still loading
+        if (loading) return;
+        
+        // Clear the container
+        document.getElementById('chart-container').innerHTML = '<canvas id="pressure-chart"></canvas>';
+        
+        if (pressureData.length === 0) {
+          document.getElementById('chart-container').innerHTML = '<p>No pressure readings recorded yet.</p>';
+          return;
         }
+        
+        // Prepare data for chart
+        var chartData = {
+          datasets: [{
+            label: 'Pressure (bar)',
+            data: pressureData.map(reading => ({
+              x: reading.time * 1000, // Convert to milliseconds
+              y: parseFloat(reading.pressure.toFixed(2))
+            })),
+            borderColor: 'rgb(75, 192, 192)',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            fill: false,
+            cubicInterpolationMode: 'monotone'
+          }]
+        };
+        
+        console.log('Chart data prepared:', JSON.stringify(chartData, null, 2));
+        
+        // Calculate Y-axis range
+        pressures = chartData.datasets[0].data.map(p => p.y);
+        minPressure = Math.min(...pressures) - 0.1;
+        maxPressure = Math.max(...pressures) + 0.1;
         
         // Add current pressure as a separate point if we have a valid reading
         if (currentPressure > 0 && currentTime > 0) {
-          // Create date in UTC (same as historical data)
-          var nowLocal = new Date(currentTime * 1000);
+          // Use current time in milliseconds
+          var nowTimestamp = currentTime * 1000;
           
-          chartData.push({
-            x: nowLocal,
+          chartData.datasets[0].data.push({
+            x: nowTimestamp,
             y: currentPressure
           });
+          
+          // Update min/max pressure to include current reading
+          minPressure = Math.min(minPressure, currentPressure);
+          maxPressure = Math.max(maxPressure, currentPressure);
         }
         
-        console.log('Chart data prepared:', chartData);
-        )HTML");
-    server.sendContent(html);
+        var padding = Math.max(0.1, (maxPressure - minPressure) * 0.1); // 10% padding
+        
+        // Create chart
+        const ctx = document.getElementById('pressure-chart').getContext('2d');
+        if (window.pressureChart) {
+          window.pressureChart.destroy();
+        }
 
-    html = F(R"HTML(    // Create the chart
-        var ctx = document.getElementById('pressure-chart').getContext('2d');
-        var chart; // Define chart variable in wider scope for reset button access
-        chart = new Chart(ctx, {
+        window.pressureChart = new Chart(ctx, {
           type: 'line',
-          data: {
-            datasets: [{
-              label: 'Pressure (bar)',
-              data: chartData,
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              borderColor: 'rgb(75, 192, 192)',
-              tension: 0.4,
-              cubicInterpolationMode: 'monotone',
-              borderWidth: 2,
-              pointRadius: 2,
-              pointHoverRadius: 4,
-              pointHoverBackgroundColor: 'rgb(75, 192, 192)',
-              fill: false
-            }]
-          },
+          data: chartData,
           options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-              xAxes: [{
+              x: {
                 type: 'time',
                 time: {
+                  unit: 'hour',
+                  tooltipFormat: 'MMM d, yyyy HH:mm',
                   displayFormats: {
-                    hour: 'MMM D, HH:mm',
-                    day: 'MMM D, HH:mm',
-                    week: 'MMM D',
-                    month: 'MMM D',
-                    quarter: 'MMM D',
-                    year: 'MMM D'
+                    minute: 'HH:mm',
+                    hour: 'MMM d HH:mm',
+                    day: 'MMM d',
+                    week: 'MMM d',
+                    month: 'MMM yyyy'
                   },
-                  // Use browser's local timezone
-                  tooltipFormat: 'MMM D, HH:mm',
-                  unit: 'minute',
-                  unitStepSize: 15
+                  minUnit: 'minute'
                 },
-                ticks: {
-                  maxRotation: 45,
-                  minRotation: 45,
-                  autoSkip: true,
-                  maxTicksLimit: 10
+                title: {
+                  display: true,
+                  text: 'Time'
                 }
-              }],
-              yAxes: [{
-                ticks: {
-                  beginAtZero: true,
-                  min: 0
-                }
-              }]
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: 'Pressure (bar)'
+                },
+                min: minPressure,
+                max: maxPressure
+              }
             },
             plugins: {
-              zoom: {
-                pan: {
-                  enabled: false
-                },
-                zoom: {
-                  enabled: true,
-                  mode: 'xy',
-                  drag: true,
-                  speed: 0.1,
-                  threshold: 2,
-                  sensitivity: 3
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return `Pressure: ${context.parsed.y.toFixed(2)} bar`;
+                  }
                 }
+              },
+              zoom: {
+                zoom: {
+                  wheel: { 
+                    enabled: true,
+                    speed: 0.1
+                  },
+                  drag: {
+                    enabled: true,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgb(75, 192, 192)'
+                  },
+                  pinch: { 
+                    enabled: true 
+                  },
+                  mode: 'xy',
+                  onZoomComplete: ({ chart }) => {
+                    chart.update('none');
+                  }
+                },
+                pan: { 
+                  enabled: false,
+                  mode: 'xy',
+                  threshold: 10
+                },
+                limits: {
+                  y: { min: 0, max: maxPressure * 1.5 }
+                }
+              }
+            },
+            interaction: {
+              intersect: false,
+              mode: 'nearest',
+              axis: 'xy'
+            },
+            animation: {
+              duration: 0
+            },
+            elements: {
+              line: {
+                tension: 0.3
               }
             }
           }
         });
+        
         // Add reset zoom button functionality
         document.getElementById('reset-zoom').addEventListener('click', function() {
-          chart.resetZoom();
+          if (pressureChart) {
+            pressureChart.resetZoom();
+          }
         });
-        // Also reset zoom on double-click
-        document.getElementById('pressure-chart').addEventListener('dblclick', function() {
-          chart.resetZoom();
-        });
+        
+        // Dispatch event that data is loaded
+        document.dispatchEvent(new Event('dataLoaded'));
       }
-    </script>)HTML");
-    server.sendContent(html);
+      
+      // Function to load all data in chunks
+      function loadAllData() {
+        var chunkSize = 50;
+        var offset = 0;
+        var totalReadings = 0;
+        
+        // Show loading indicator
+        document.getElementById('chart-container').innerHTML = '<p>Loading pressure data...</p>';
+        
+        // Function to fetch and process a chunk of data
+        function fetchChunk() {
+          fetch('/api/pressure/readings?offset=' + offset + '&limit=' + chunkSize)
+            .then(response => response.json())
+            .then(data => {
+              if (data.readings && data.readings.length > 0) {
+                // Append new readings
+                pressureData = pressureData.concat(data.readings);
+                totalReadings = data.totalReadings || 0;
+                offset += data.readings.length;
+                 
+                // If we have more data, fetch next chunk
+                if (offset < totalReadings) {
+                  setTimeout(fetchChunk, 0); // Small delay to allow UI to update
+                } else {
+                  // All data loaded, update chart
+                  loading = false;
+                  updateChart();
+                }
+              } else {
+                // No more data
+                loading = false;
+                updateChart();
+              }
+            })
+            .catch(error => {
+              console.error('Error loading data:', error);
+              document.getElementById('chart-container').innerHTML = '<p>Error loading data. Please refresh the page to try again.</p>';
+            });
+        }
+        
+        // Start loading data
+        fetchChunk();
+      }
+      
+      // Start loading data when page loads
+      loadAllData();
     
-    // Add summary information
-    html = F(R"HTML(<script>
-      // Display summary information if we have data
-      if (pressureData && pressureData.readings && pressureData.readings.length > 0) {
-        document.write('<p><strong>Total readings:</strong> ' + pressureData.readings.length + '</p>');
-        // Convert GMT timestamps to local time
-        var firstDate = new Date(pressureData.readings[0].time * 1000);
-        var lastDate = new Date(pressureData.readings[pressureData.readings.length-1].time * 1000);
-        document.write('<p><strong>Date range:</strong> ' + firstDate.toLocaleString() + ' to ' + lastDate.toLocaleString() + '</p>');
+    )HTML"));
+    // The chart data is loaded asynchronously via loadAllData()
+    html = F(R"HTML(
+      if (!pressureData || pressureData.length === 0) {
+        document.getElementById('chart-container').innerHTML = '<p>Loading pressure data...</p>';
       }
-    </script>
-    <div style="margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
-      <h3>Data Retention Settings</h3>
-      <form id="retentionForm">
-        <label for="retentionDays">Keep pressure data for: </label>
-        <input type="number" id="retentionDays" name="retentionDays" min="1" max="90" value=")HTML");
+        </script>
+        )HTML");
+    server.sendContent(html);
+
+    // Chart will be created by the updateChart() function after data is loaded
+    
+    // Add summary information section
+    html = F(R"HTML(
+    <div style="margin-top: 30px;">
+      <div id="summary-info" style="padding: 15px; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 20px;">
+        <h3>Pressure Data Summary</h3>
+        <p>Loading data...</p>
+      </div>
+      
+      <div style="padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
+        <h3>Data Retention Settings</h3>
+        <form id="retentionForm">
+          <label for="retentionDays">Keep pressure data for: </label>
+          <input type="number" id="retentionDays" name="retentionDays" min="1" max="90" value=")HTML");
     server.sendContent(html);    
     server.sendContent(String(settings.getDataRetentionDays()));
-    server.sendContent(F(R"HTML(" style="width: 60px;"> days
-        <button type="button" onclick="saveRetentionSettings()" style="margin-left: 10px;">Save</button>
-        <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>
-        <p id="retentionStatus" style="font-weight: bold;"></p>
-      </form>
+    server.sendContent(F(R"HTML(" style="width: 60px; padding: 3px;"> days
+          <button type="button" onclick="saveRetentionSettings()" class="btn" style="margin-left: 10px;">Save</button>
+          <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>
+          <p id="retentionStatus" style="font-weight: bold; margin-top: 10px;"></p>
+        </form>
+      </div>
     </div>
+    
     <script>
+      // Function to update summary information
+      function updateSummaryInfo() {
+        if (pressureData.length === 0) {
+          document.getElementById('summary-info').innerHTML = '<h3>Pressure Data Summary</h3><p>No pressure data available.</p>';
+          return;
+        }
+        
+        // Calculate statistics
+        const firstReading = pressureData[0];
+        const lastReading = pressureData[pressureData.length - 1];)HTML"));
+        
+      server.sendContent(F(R"HTML(
+        // Find min/max pressure
+        let minPressure = firstReading.pressure;
+        let maxPressure = firstReading.pressure;
+        let totalPressure = 0;
+        
+        pressureData.forEach(reading => {
+          if (reading.pressure < minPressure) minPressure = reading.pressure;
+          if (reading.pressure > maxPressure) maxPressure = reading.pressure;
+          totalPressure += reading.pressure;
+        });
+        
+        const avgPressure = totalPressure / pressureData.length;
+        
+        // Format dates
+        const firstDate = new Date(firstReading.time * 1000);
+        const lastDate = new Date(lastReading.time * 1000);
+        const dateFormatOptions = { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric',
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true
+        };
+        
+        // Format dates as strings
+        const formatDate = (date) => {
+          return date.toLocaleString(undefined, dateFormatOptions);
+        };
+      )HTML"));
+      server.sendContent(F(R"HTML(
+        // Create the summary HTML
+        const summaryHTML = `
+          <h3>Pressure Data Summary</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 10px;">
+            <div style="background: white; padding: 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Total Readings</div>
+              <div style="font-size: 1.5em; font-weight: bold;">${pressureData.length.toLocaleString()}</div>
+            </div>
+            <div style="background: white; padding: 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Date Range</div>
+              <div style="font-size: 1.1em;">
+                ${formatDate(firstDate)}<br>to<br>${formatDate(lastDate)}
+              </div>
+            </div>
+            <div style="background: white; padding: 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="font-size: 0.9em; color: #666; margin-bottom: 5px;">Pressure Range</div>
+              <div style="font-size: 1.1em;">
+                <span style="color: #e74c3c;">${minPressure.toFixed(2)}</span> to 
+                <span style="color: #e74c3c;">${maxPressure.toFixed(2)}</span> bar
+              </div>
+              <div style="margin-top: 5px; font-size: 0.9em;">
+                Average: <strong>${avgPressure.toFixed(2)}</strong> bar
+              </div>
+            </div>
+          </div>
+        `;
+        
+        // Update the DOM
+        document.getElementById('summary-info').innerHTML = summaryHTML;
+      }
+      )HTML"));
+      server.sendContent(F(R"HTML(
+      // Update summary when data is loaded
+      document.addEventListener('dataLoaded', updateSummaryInfo);
+      
+      // Handle retention settings save
       function saveRetentionSettings() {
         const retentionDays = document.getElementById('retentionDays').value;
-        const status = document.getElementById('retentionStatus');
+        const statusElement = document.getElementById('retentionStatus');
+        
+        if (retentionDays < 1 || retentionDays > 90) {
+          statusElement.textContent = 'Please enter a value between 1 and 90.';
+          statusElement.style.color = '#e74c3c';
+          return;
+        }
         
         fetch('/setretention', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: 'retentionDays=' + retentionDays
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: 'days=' + encodeURIComponent(retentionDays)
         })
         .then(response => response.json())
         .then(data => {
-          status.textContent = data.message;
-          status.style.color = data.success ? 'green' : 'red';
-          setTimeout(() => { status.textContent = ''; }, 3000);
+          statusElement.textContent = data.message;
+          statusElement.style.color = data.success ? '#27ae60' : '#e74c3c';
+          
+          // Hide message after 5 seconds
+          setTimeout(() => {
+            statusElement.textContent = '';
+          }, 5000);
         })
         .catch(error => {
-          status.textContent = 'Error: ' + error;
-          status.style.color = 'red';
+          statusElement.textContent = 'Error saving retention settings: ' + error;
+          statusElement.style.color = '#e74c3c';
         });
       }
-    </script>)HTML"));
- 
+    </script>
+    )HTML"));
+    
+    // Add timezone information and close HTML
+    String timeInfo = "<p class='info'>Current time: ";
+    timeInfo += timeManager.getCurrentTimeStr();
+    timeInfo += " (GMT";
     int offsetHours = timeManager.getTimezoneOffset() / 3600;
-    html = "<p class='info'>Current time: " + timeManager.getCurrentTimeStr() + " (GMT" + (offsetHours >= 0 ? "+" : "") + String(offsetHours) + ")</p>\n";
+    if (offsetHours >= 0) timeInfo += "+";
+    timeInfo += String(offsetHours);
+    timeInfo += ")</p>\n";
     
-    html += "</body>\n";
-    html += "</html>\n";
+    timeInfo += "</body>\n";
+    timeInfo += "</html>\n";
     
-    server.sendContent(html);
+    server.sendContent(timeInfo);
     server.sendContent("");
 }
 
@@ -1315,18 +1517,6 @@ void WebServer::handleSettings() {
   
   html += R"HTML(</td>
         </tr>
-        <tr>
-          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0;'><strong>Min Pressure:</strong></td>
-          <td style='padding: 10px; border-bottom: 1px solid #e0e0e0; font-family: monospace;'>0.0 bar</td>
-        </tr>
-        <tr>
-          <td style='padding: 10px;'><strong>Max Pressure:</strong></td>
-          <td style='padding: 10px; font-family: monospace;'>)HTML";
-  
-  html += String(PRESSURE_MAX, 1) + " bar";
-  
-  html += R"HTML(</td>
-        </tr>
       </table>
       <p style='margin: 15px 0 0 0; font-style: italic; color: #666; font-size: 0.9em;'>This information updates when you refresh the page</p>
     </div>
@@ -1474,6 +1664,27 @@ void WebServer::handleResetCalibration() {
     server.send(200, "text/plain", "Calibration reset to default values");
 }
 
+void WebServer::handlePressureReadingsApi() {
+    // Get pagination parameters
+    int offset = server.arg("offset").toInt();
+    int limit = server.arg("limit").toInt();
+    
+    // Set default values if not provided
+    offset = max(0, offset);
+    limit = (limit < 1 || limit > 100) ? 50 : limit; // Max 100 readings per request
+    
+    // Get paginated readings - we'll use the existing function but with offset/limit
+    int totalPages = 0;
+    int page = (offset / limit) + 1; // Convert offset to page number
+    String json = pressureLogger.getPaginatedReadingsAsJson(page, limit, totalPages);
+    
+    // Send response with no-cache headers
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    server.sendHeader("Pragma", "no-cache");
+    server.sendHeader("Expires", "-1");
+    server.send(200, "application/json", json);
+}
+
 void WebServer::handlePressureCsv() {
     Serial.printf("[Memory] handlePressureCsv start: %d bytes free\n", ESP.getFreeHeap());
     // FIXME chunk this into 2k chunks
@@ -1495,8 +1706,8 @@ void WebServer::handleSetRetention() {
     bool success = false;
     String message = "Failed to update retention settings";
     
-    if (server.hasArg("retentionDays")) {
-        String retentionDaysStr = server.arg("retentionDays");
+    if (server.hasArg("days")) {
+        String retentionDaysStr = server.arg("days");
         unsigned int retentionDays = retentionDaysStr.toInt();
         
         // Validate input
