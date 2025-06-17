@@ -746,9 +746,9 @@ void WebServer::handlePressureHistory() {
     server.sendContent("var pressureData = [];\n");
     
     // Add current pressure and time
-    unsigned long localTime = timeManager.getCurrentTime();
+    unsigned long utcTime = timeManager.getCurrentGMTTime();
     server.sendContent("var currentPressure = " + String(currentPressure, 2) + ";\n");
-    server.sendContent("var currentTime = " + String(localTime) + ";\n");
+    server.sendContent("var currentTime = " + String(utcTime) + ";\n");
     
     // Add loading indicator and chart update function
     server.sendContent(F(R"HTML(
