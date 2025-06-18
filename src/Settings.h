@@ -23,6 +23,8 @@ private:
     static constexpr unsigned int DEFAULT_BACKFLUSH_DURATION = 30;
     static constexpr float DEFAULT_SENSOR_MAX_PRESSURE = 4.0f;
     static constexpr unsigned int DEFAULT_DATA_RETENTION_DAYS = 7;
+    static constexpr float DEFAULT_PRESSURE_CHANGE_THRESHOLD = 0.17f; // Default threshold for pressure change logging (bar)
+    static constexpr unsigned int DEFAULT_PRESSURE_CHANGE_MAX_INTERVAL = 10; // Default max interval for pressure change logging (minutes)
     
     // Default calibration points (voltage, pressure)
     static const CalibrationPoint DEFAULT_CALIBRATION[NUM_CALIBRATION_POINTS];
@@ -33,6 +35,8 @@ private:
     static constexpr const char* KEY_DURATION = "duration";
     static constexpr const char* KEY_SENSOR_MAX = "sensormax";
     static constexpr const char* KEY_RETENTION_DAYS = "retdays";
+    static constexpr const char* KEY_PRESSURE_CHANGE_THRESHOLD = "pcthresh";
+    static constexpr const char* KEY_PRESSURE_CHANGE_MAX_INTERVAL = "pcmaxinterval";
     static constexpr const char* KEY_CALIBRATION = "cal";
     
     void setDefaults();
@@ -64,6 +68,12 @@ public:
     void setBackflushDuration(unsigned int duration);
     void setSensorMaxPressure(float maxPressure);
     void setDataRetentionDays(unsigned int days);
+    
+    // Pressure change threshold methods
+    float getPressureChangeThreshold();
+    void setPressureChangeThreshold(float threshold);
+    unsigned int getPressureChangeMaxInterval();
+    void setPressureChangeMaxInterval(unsigned int interval);
 };
 
 #endif // SETTINGS_H

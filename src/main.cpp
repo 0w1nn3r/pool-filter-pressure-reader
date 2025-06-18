@@ -313,7 +313,7 @@ float readPressure() {
         
         // Get the calibration table from settings
         const CalibrationPoint* calTable = settings->getCalibrationTable();
-        float currentPressure = 0.0;
+        float rawPressure = 0.0;
         
         // Find the two closest calibration points
         bool pointFound = false;
@@ -326,7 +326,7 @@ float readPressure() {
                 float y1 = calTable[i+1].pressure;
                 
                 // Linear interpolation
-                currentPressure = y0 + (sensorVoltage - x0) * (y1 - y0) / (x1 - x0);
+                rawPressure = y0 + (sensorVoltage - x0) * (y1 - y0) / (x1 - x0);
                 pointFound = true;
                 break;
             }
@@ -336,10 +336,10 @@ float readPressure() {
         if (!pointFound) {
             if (sensorVoltage < calTable[0].voltage) {
                 // Below minimum voltage - use first point
-                currentPressure = calTable[0].pressure;
+                rawPressure = calTable[0].pressure;
             } else {
                 // Above maximum voltage - use last point
-                currentPressure = calTable[NUM_CALIBRATION_POINTS-1].pressure;
+                rawPressure = calTable[NUM_CALIBRATION_POINTS-1].pressure;
             }
         }
         
@@ -353,7 +353,7 @@ float readPressure() {
         }
         
         // Apply exponential moving average filter
-        smoothedPressure = alpha * currentPressure + (1.0f - alpha) * smoothedPressure;
+        smoothedPressure = alpha * rawPressure + (1.0f - alpha) * smoothedPressure;
         
         // Update last read time
         lastReadTime = currentTime;
@@ -365,7 +365,7 @@ float readPressure() {
         Serial.print(", Voltage: ");
         Serial.print(sensorVoltage, 3);
         Serial.print("V, Pressure: ");
-        Serial.print(currentPressure, 3);
+        Serial.print(rawPressure, 3);
         Serial.print(" bar, Smoothed: ");
         Serial.print(smoothedPressure, 3);
         Serial.print(" bar, Alpha: ");

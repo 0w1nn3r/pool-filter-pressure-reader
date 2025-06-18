@@ -79,6 +79,8 @@ private:
     void handleScheduleDelete();
     void handleResetCalibration();
     void handlePressureReadingsApi();
+    void handleSetPressureThreshold();
+    void handleSetPressureMaxInterval();
 
 public:
     WebServer(float& pressure, int& rawADC, float& voltage, float& threshold, unsigned int& duration, 

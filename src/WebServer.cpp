@@ -122,6 +122,8 @@ void WebServer::begin() {
     server.on("/sensorconfig", HTTP_POST, std::bind(&WebServer::handleSensorConfig, this));
     server.on("/resetcalibration", HTTP_POST, std::bind(&WebServer::handleResetCalibration, this));
     server.on("/setretention", HTTP_POST, std::bind(&WebServer::handleSetRetention, this));
+    server.on("/setpressurethreshold", HTTP_POST, std::bind(&WebServer::handleSetPressureThreshold, this));
+    server.on("/setpressuremaxinterval", HTTP_POST, std::bind(&WebServer::handleSetPressureMaxInterval, this));
     server.on("/pressure.csv", [this]() { handlePressureCsv(); });
     server.on("/api/pressure/readings", HTTP_GET, [this]() { handlePressureReadingsApi(); });
     
@@ -923,14 +925,14 @@ void WebServer::handlePressureHistory() {
                 
                 // Update the chart without animation
                 pressureChart.update('none');
+                document.dispatchEvent(new Event('dataLoaded'));
               }
             })
             .catch(error => console.error('Error fetching new readings:', error));
         }
         
-        // Check for new readings every 2 seconds
-        setInterval(checkForNewReadings, 2000);
-        
+        // Check for new readings every 10 seconds
+        setInterval(checkForNewReadings, 10000);
         
         // Dispatch event that data is loaded
         document.dispatchEvent(new Event('dataLoaded'));
@@ -1003,9 +1005,9 @@ void WebServer::handlePressureHistory() {
       </div>
       
       <div style="padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
-        <h3>Data Retention Settings</h3>
+        <h3>Settings</h3>
         <form id="retentionForm">
-          <label for="retentionDays">Keep pressure data for: </label>
+          <label for="retentionDays" style="width: 220px;">Keep pressure data for: </label>
           <input type="number" id="retentionDays" name="retentionDays" min="1" max="90" value=")HTML");
     server.sendContent(html);    
     server.sendContent(String(settings.getDataRetentionDays()));
@@ -1013,7 +1015,24 @@ void WebServer::handlePressureHistory() {
           <button type="button" onclick="saveRetentionSettings()" class="btn" style="margin-left: 10px;">Save</button>
           <p><small>Data older than this will be automatically pruned. Valid range: 1-90 days.</small></p>
           <p id="retentionStatus" style="font-weight: bold; margin-top: 10px;"></p>
-        </form>
+          </form>
+          <div class='settings-form'> <form> <div class='form-group'>
+                <label for='threshold' style="width: 220px;">Pressure Change Threshold (bar):</label>
+                <input type='number' id='threshold' name='threshold' min='0.01' max='1.0' step='0.01' value=')HTML")); 
+      server.sendContent(String(settings.getPressureChangeThreshold(), 2));
+      server.sendContent(F(R"HTML('>
+                <button type="button" onclick="savePressureThreshold()" class='btn'>Save</button>
+                <p><small>Pressure must change by this amount to be logged (default: 0.17 bar)</small></p>
+                <p id="thresholdStatus" style="font-weight: bold; margin-top: 10px;"></p>
+              </div> </form> </div>
+          <div class='settings-form'> <form> <div class='form-group'>
+                <label for='pressureMaxInterval' style="width: 220px;">Pressure Max Interval (minutes):</label>
+                <input type='number' id='pressureMaxInterval' name='pressureMaxInterval' min='1' max='1440' step='1' value=')HTML"));
+      server.sendContent(String(settings.getPressureChangeMaxInterval()));
+      server.sendContent(F(R"HTML('>
+              <button type="button" onclick="savePressureMaxInterval()" class='btn'>Save</button>
+              <p id="pressureMaxIntervalStatus" style="font-weight: bold; margin-top: 10px;"></p>
+            </div></form> </div>
       </div>
     </div>
     
@@ -1096,38 +1115,35 @@ void WebServer::handlePressureHistory() {
       // Update summary when data is loaded
       document.addEventListener('dataLoaded', updateSummaryInfo);
       
-      // Handle retention settings save
-      function saveRetentionSettings() {
-        const retentionDays = document.getElementById('retentionDays').value;
-        const statusElement = document.getElementById('retentionStatus');
+      
+      function saveParameter(endpoint, valueElement, statusElement) {
+        const value = document.getElementById(valueElement).value;
+        const status = document.getElementById(statusElement);
         
-        if (retentionDays < 1 || retentionDays > 90) {
-          statusElement.textContent = 'Please enter a value between 1 and 90.';
-          statusElement.style.color = '#e74c3c';
-          return;
-        }
-        
-        fetch('/setretention', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: 'days=' + encodeURIComponent(retentionDays)
+        fetch(endpoint, {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', },
+          body: valueElement + '=' + encodeURIComponent(value)
         })
         .then(response => response.json())
         .then(data => {
-          statusElement.textContent = data.message;
-          statusElement.style.color = data.success ? '#27ae60' : '#e74c3c';
-          
+          status.textContent = data.message;
+          status.style.color = data.success ? '#27ae60' : '#e74c3c';
           // Hide message after 5 seconds
-          setTimeout(() => {
-            statusElement.textContent = '';
-          }, 5000);
+          setTimeout(() => { status.textContent = ''; }, 5000);
         })
         .catch(error => {
-          statusElement.textContent = 'Error saving retention settings: ' + error;
-          statusElement.style.color = '#e74c3c';
+          status.textContent = 'Error saving ' + valueElement + ': ' + error;
+          status.style.color = '#e74c3c';
         });
+      }
+      function savePressureThreshold() {
+        saveParameter('/setpressurethreshold', 'threshold', 'thresholdStatus');
+      }
+      function saveRetentionSettings() {
+        saveParameter('/setretention', 'retentionDays', 'retentionStatus');
+      }
+      function savePressureMaxInterval() {
+        saveParameter('/setpressuremaxinterval', 'pressureMaxInterval', 'pressureMaxIntervalStatus');
       }
     </script>
     )HTML"));
@@ -1758,8 +1774,8 @@ void WebServer::handleSetRetention() {
     bool success = false;
     String message = "Failed to update retention settings";
     
-    if (server.hasArg("days")) {
-        String retentionDaysStr = server.arg("days");
+    if (server.hasArg("retentionDays")) {
+        String retentionDaysStr = server.arg("retentionDays");
         unsigned int retentionDays = retentionDaysStr.toInt();
         
         // Validate input
@@ -1782,7 +1798,42 @@ void WebServer::handleSetRetention() {
         }
     }
     
-    // Return JSON response instead of redirecting
+    String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
+    server.send(200, "application/json", jsonResponse);
+}
+
+void WebServer::handleSetPressureThreshold() {
+    bool success = false;
+    String message = "Failed to update pressure threshold";
+    if (server.hasArg("threshold")) {
+        float newThreshold = server.arg("threshold").toFloat();
+        if (newThreshold > 0 && newThreshold <= 1.0) {
+            settings.setPressureChangeThreshold(newThreshold);
+            success = true;
+            message = "Pressure change threshold updated to " + String(newThreshold, 2) + " bar";
+        }
+        else {
+            message = "Invalid pressure threshold. Must be between 0 and 1 bar.";
+        }
+    }
+    String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
+    server.send(200, "application/json", jsonResponse);
+}
+
+void WebServer::handleSetPressureMaxInterval() {
+    bool success = false;
+    String message = "Failed to update pressure max interval";
+    if (server.hasArg("pressureMaxInterval")) {
+        unsigned int newInterval = server.arg("pressureMaxInterval").toInt();
+        if (newInterval >= 1 && newInterval <= 1440) {
+            settings.setPressureChangeMaxInterval(newInterval);
+            success = true;
+            message = "Pressure change max interval updated to " + String(newInterval) + " minutes";
+        }
+        else {
+            message = "Invalid pressure max interval. Must be between 1 and 1440 minutes.";
+        }
+    }
     String jsonResponse = "{\"success\":" + String(success ? "true" : "false") + ",\"message\":\"" + message + "\"}";
     server.send(200, "application/json", jsonResponse);
 }

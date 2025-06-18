@@ -1,8 +1,7 @@
 #include "PressureLogger.h"
 
 const char* PressureLogger::LOG_FILE = "/pressure_history.json";
-const float PressureLogger::PRESSURE_CHANGE_THRESHOLD = 0.17f; // Record if pressure changes by 0.15 bar or more
-
+ 
 PressureLogger::PressureLogger(TimeManager& tm, Settings& settings) 
     : timeManager(tm), settings(&settings), initialized(false), lastRecordedPressure(0), lastSaveTime(0) {
 }
@@ -117,10 +116,12 @@ void PressureLogger::addReading(float pressure, bool force) {
     
     // Get current GMT time
     time_t currentGMTTime = timeManager.getCurrentGMTTime();
+    static time_t lastRecordedTime = 0;
     
     // Only record if pressure has changed significantly or it's the first reading
     if (readings.empty() 
-        || abs(pressure - lastRecordedPressure) >= PRESSURE_CHANGE_THRESHOLD
+        || abs(pressure - lastRecordedPressure) >= settings->getPressureChangeThreshold()
+        || (currentGMTTime - lastRecordedTime) >= (settings->getPressureChangeMaxInterval() * 60)
         || force) {
         // Ensure we have a valid timestamp (after Jan 1, 2021)
         if (currentGMTTime < 1609459200) { // Jan 1, 2021 timestamp
@@ -134,6 +135,7 @@ void PressureLogger::addReading(float pressure, bool force) {
         
         readings.push_back(reading);
         lastRecordedPressure = pressure;
+        lastRecordedTime = currentGMTTime;
         
         // Trim old readings if we exceed maximum
         if (readings.size() > MAX_READINGS) {

@@ -44,6 +44,9 @@ void Settings::setDefaults() {
     // Reset to default calibration
     memcpy(calibrationTable, DEFAULT_CALIBRATION, sizeof(DEFAULT_CALIBRATION));
     saveCalibration();
+    
+    // Set default pressure change threshold
+    setPressureChangeThreshold(DEFAULT_PRESSURE_CHANGE_THRESHOLD);
 }
 
 void Settings::reset() {
@@ -181,4 +184,24 @@ void Settings::setDataRetentionDays(unsigned int days) {
     if (days >= 1 && days <= 90) {
         preferences.putUInt(KEY_RETENTION_DAYS, days);
     }
+}
+
+float Settings::getPressureChangeThreshold() {
+    if (!initialized) begin();
+    return preferences.getFloat(KEY_PRESSURE_CHANGE_THRESHOLD, DEFAULT_PRESSURE_CHANGE_THRESHOLD);
+}
+
+void Settings::setPressureChangeThreshold(float threshold) {
+    if (!initialized) begin();
+    preferences.putFloat(KEY_PRESSURE_CHANGE_THRESHOLD, threshold);
+}
+
+unsigned int Settings::getPressureChangeMaxInterval() {
+    if (!initialized) begin();
+    return preferences.getUInt(KEY_PRESSURE_CHANGE_MAX_INTERVAL, DEFAULT_PRESSURE_CHANGE_MAX_INTERVAL);
+}
+
+void Settings::setPressureChangeMaxInterval(unsigned int interval) {
+    if (!initialized) begin();
+    preferences.putUInt(KEY_PRESSURE_CHANGE_MAX_INTERVAL, interval);
 }

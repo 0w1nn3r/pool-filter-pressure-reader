@@ -18,7 +18,6 @@ class PressureLogger {
 private:
     static const char* LOG_FILE;
     static const size_t MAX_READINGS = 500; // about 8kb
-    static const float PRESSURE_CHANGE_THRESHOLD; // Record if pressure changes by this amount
     
     TimeManager& timeManager;
     Settings* settings; // Reference to settings for data retention period
