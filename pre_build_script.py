@@ -106,9 +106,6 @@ inline String getGitSha() {{
     
     print(f"Generated {version_h_path} with SHA: {display_sha}")
     
-    # Also write the SHA to .git_sha for future reference
-    with open('.git_sha', 'w') as f:
-        f.write(git_sha)
 
 def main():
     print("Running pre-build script...")

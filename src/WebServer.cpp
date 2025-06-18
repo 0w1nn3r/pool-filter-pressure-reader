@@ -754,6 +754,7 @@ void WebServer::handlePressureHistory() {
     server.sendContent(F(R"HTML(
       var loading = true;
       var pressureChart = null;
+      var chunkSize = 50;
       
       // Function to update the chart with current data
       function updateChart() {
@@ -837,18 +838,11 @@ void WebServer::handlePressureHistory() {
                   },
                   minUnit: 'minute'
                 },
-                title: {
-                  display: true,
-                  text: 'Time'
-                }
+                title: { display: true, text: 'Time' }
               },
               y: {
-                title: {
-                  display: true,
-                  text: 'Pressure (bar)'
-                },
-                min: minPressure,
-                max: maxPressure
+                title: { display: true, text: 'Pressure (bar)' },
+                min: minPressure, max: maxPressure
               }
             },
             plugins: {
@@ -861,18 +855,13 @@ void WebServer::handlePressureHistory() {
               },
               zoom: {
                 zoom: {
-                  wheel: { 
-                    enabled: true,
-                    speed: 0.1
-                  },
+                  wheel: { enabled: true, speed: 0.1 },
                   drag: {
                     enabled: true,
                     backgroundColor: 'rgba(75, 192, 192, 0.2)',
                     borderColor: 'rgb(75, 192, 192)'
                   },
-                  pinch: { 
-                    enabled: true 
-                  },
+                  pinch: { enabled: true },
                   mode: 'xy',
                   onZoomComplete: ({ chart }) => {
                     chart.update('none');
@@ -883,9 +872,7 @@ void WebServer::handlePressureHistory() {
                   mode: 'xy',
                   threshold: 10
                 },
-                limits: {
-                  y: { min: 0, max: maxPressure * 1.5 }
-                }
+                limits: { y: { min: 0, max: maxPressure * 1.5 } }
               }
             },
             interaction: {
@@ -893,14 +880,8 @@ void WebServer::handlePressureHistory() {
               mode: 'nearest',
               axis: 'xy'
             },
-            animation: {
-              duration: 0
-            },
-            elements: {
-              line: {
-                tension: 0.3
-              }
-            }
+            animation: { duration: 0 },
+            elements: { line: { tension: 0.3 } }
           }
         });
         
@@ -911,13 +892,52 @@ void WebServer::handlePressureHistory() {
           }
         });
         
+        // Function to check for new readings
+        function checkForNewReadings() {
+          if (!pressureChart || !pressureData.length) return;
+          
+          // Get the timestamp of the most recent reading we have
+          const lastTimestamp = Math.max(...pressureData.map(r => r.time));
+          
+          fetch(`/api/pressure/readings?since=${lastTimestamp + 1}&limit=${chunkSize}`)
+            .then(response => response.json())
+            .then(data => {
+              if (data.readings && data.readings.length > 0) {
+                console.log(`Found ${data.readings.length} new readings`);
+                
+                pressureData = pressureData.concat(data.readings);
+                
+                // Update the chart
+                pressureChart.data.datasets[0].data = pressureData.map(r => ({
+                  x: r.time * 1000,
+                  y: r.pressure
+                }));
+                
+                // Update the y-axis range if needed
+                const pressures = pressureData.map(r => r.pressure);
+                const minPressure = Math.min(...pressures) - 0.1;
+                const maxPressure = Math.max(...pressures) + 0.1;
+                
+                pressureChart.options.scales.y.min = minPressure;
+                pressureChart.options.scales.y.max = maxPressure;
+                
+                // Update the chart without animation
+                pressureChart.update('none');
+              }
+            })
+            .catch(error => console.error('Error fetching new readings:', error));
+        }
+        
+        // Check for new readings every 2 seconds
+        setInterval(checkForNewReadings, 2000);
+        
+        
         // Dispatch event that data is loaded
         document.dispatchEvent(new Event('dataLoaded'));
       }
       
       // Function to load all data in chunks
       function loadAllData() {
-        var chunkSize = 50;
         var offset = 0;
         var totalReadings = 0;
         
@@ -1665,19 +1685,51 @@ void WebServer::handleResetCalibration() {
 }
 
 void WebServer::handlePressureReadingsApi() {
-    // Get pagination parameters
-    int offset = server.arg("offset").toInt();
-    int limit = server.arg("limit").toInt();
-    
-    // Set default values if not provided
-    offset = max(0, offset);
-    limit = (limit < 1 || limit > 100) ? 50 : limit; // Max 100 readings per request
-    
-    // Get paginated readings - we'll use the existing function but with offset/limit
-    int totalPages = 0;
-    int page = (offset / limit) + 1; // Convert offset to page number
-    String json = pressureLogger.getPaginatedReadingsAsJson(page, limit, totalPages);
-    
+    String json;
+    // Check for 'since' parameter first
+    if (server.hasArg("since")) {
+        time_t since = server.arg("since").toInt();
+        int limit = server.hasArg("limit") ? server.arg("limit").toInt() : 100;
+        
+        // Get readings since the specified timestamp (most recent first)
+        std::vector<PressureReading> newReadings = pressureLogger.getReadingsSince(since, limit);
+        
+        // Create JSON response
+        DynamicJsonDocument doc(4096);
+        JsonArray readingsArray = doc.createNestedArray("readings");
+        
+        // Convert readings to JSON (already in reverse chronological order)
+        for (const auto& reading : newReadings) {
+            JsonObject readingObj = readingsArray.add<JsonObject>();
+            readingObj["time"] = reading.timestamp;
+            readingObj["pressure"] = reading.pressure;
+            
+            // Add formatted time string
+            char timeStr[20];
+            struct tm* timeinfo = localtime(&reading.timestamp);
+            strftime(timeStr, sizeof(timeStr), "%H:%M:%S", timeinfo);
+            readingObj["timeStr"] = String(timeStr);
+        }
+        
+        // Add metadata
+        doc["count"] = newReadings.size();
+        doc["success"] = true;
+        
+        serializeJson(doc, json);
+    } else {
+        // Original pagination logic
+        int offset = server.arg("offset").toInt();
+        int limit = server.arg("limit").toInt();
+        
+        // Set default values if not provided
+        offset = max(0, offset);
+        limit = (limit < 1 || limit > 100) ? 50 : limit; // Max 100 readings per request
+        
+        // Get paginated readings - we'll use the existing function but with offset/limit
+        int totalPages = 0;
+        int page = (offset / limit) + 1; // Convert offset to page number
+        json = pressureLogger.getPaginatedReadingsAsJson(page, limit, totalPages);
+    }
     // Send response with no-cache headers
     server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     server.sendHeader("Pragma", "no-cache");

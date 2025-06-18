@@ -17,7 +17,7 @@ struct PressureReading {
 class PressureLogger {
 private:
     static const char* LOG_FILE;
-    static const size_t MAX_READINGS = 500; 
+    static const size_t MAX_READINGS = 500; // about 8kb
     static const float PRESSURE_CHANGE_THRESHOLD; // Record if pressure changes by this amount
     
     TimeManager& timeManager;
@@ -51,6 +51,24 @@ public:
     
     // Check available space
     bool checkSpaceAndTrim();
+    
+    // Get all readings as a vector
+    std::vector<PressureReading> getAllReadings() const {
+        return readings; // Return a copy of the readings vector
+    }
+    
+    // Get readings since a specific timestamp (readings are in reverse chronological order)
+    std::vector<PressureReading> getReadingsSince(time_t since, int limit = 100) const {
+        std::vector<PressureReading> result;
+        // Iterate backwards through the readings (newest first)
+        for (auto it = readings.rbegin(); it != readings.rend() && result.size() < static_cast<size_t>(limit); ++it) {
+            if (it->timestamp <= since) {
+                break; // Stop when we reach readings older than 'since'
+            }
+            result.push_back(*it);
+        }
+        return result;
+    }
     
     // Get readings as CSV
     String getReadingsAsCsv();
