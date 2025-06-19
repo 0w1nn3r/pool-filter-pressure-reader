@@ -1560,7 +1560,7 @@ void WebServer::handleSettings() {
 
     <div class='settings-form'>
       <h2>Software Update</h2>
-      <p>Version: <code>)HTML" + getGitSha() + R"HTML(</code></p>
+      <p>Version: <a target="_blank" href='https://github.com/0w1nn3r/pool-filter-pressure-reader/commit/)HTML" + getGitSha() + "'><code>" + getGitSha() + R"HTML(</code></a></p>
       <p>Built: )HTML" + String(BUILD_DATE) + " " + String(BUILD_TIME) + R"HTML(</p>
       <p>You can update the device's software using the Over-The-Air (OTA) update feature.</p>
       <p>Device hostname: )HTML" + String(HOSTNAME) + ".local</p>";
