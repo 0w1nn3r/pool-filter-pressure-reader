@@ -248,17 +248,6 @@ String PressureLogger::getPaginatedReadingsAsJson(int page, int limit, int& tota
         JsonObject readingObj = readingsArray.add<JsonObject>();
         readingObj["time"] = reading.timestamp;
         readingObj["pressure"] = reading.pressure;
-        
-        // Add formatted time string
-        char timeStr[20];
-        struct tm* timeinfo = localtime(&reading.timestamp);
-        strftime(timeStr, sizeof(timeStr), "%H:%M:%S", timeinfo);
-        readingObj["timeStr"] = String(timeStr);
-        
-        // Add formatted date string
-        char dateStr[20];
-        strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", timeinfo);
-        readingObj["dateStr"] = String(dateStr);
     }
     
     // Add pagination info
